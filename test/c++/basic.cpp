@@ -1,7 +1,7 @@
 #include <triqs/test_tools/gfs.hpp>
-#include <app4triqs/app4triqs.hpp>
+#include <hartree_fock/hartree_fock.hpp>
 
-using namespace app4triqs;
+using namespace hartree_fock;
 
 TEST(Toto, Add) { // NOLINT
 

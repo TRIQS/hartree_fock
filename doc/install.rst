@@ -2,10 +2,10 @@
 
 .. _install:
 
-Install app4triqs
+Install hartree_fock
 *******************
 
-Compiling app4triqs from source
+Compiling hartree_fock from source
 ===============================
 
 .. note:: To guarantee reproducibility in scientific calculations we strongly recommend the use of a stable `release <https://github.com/TRIQS/triqs/releases>`_ of both TRIQS and its applications.
@@ -19,13 +19,13 @@ Prerequisites
 Installation steps
 ------------------
 
-#. Download the source code of the latest stable version by cloning the ``TRIQS/app4triqs`` repository from GitHub::
+#. Download the source code of the latest stable version by cloning the ``TRIQS/hartree_fock`` repository from GitHub::
 
-     $ git clone https://github.com/TRIQS/app4triqs app4triqs.src
+     $ git clone https://github.com/TRIQS/hartree_fock hartree_fock.src
 
 #. Create and move to a new directory where you will compile the code::
 
-     $ mkdir app4triqs.build && cd app4triqs.build
+     $ mkdir hartree_fock.build && cd hartree_fock.build
 
 #. Ensure that your shell contains the TRIQS environment variables by sourcing the ``triqsvars.sh`` file from your TRIQS installation::
 
@@ -33,7 +33,7 @@ Installation steps
 
 #. In the build directory call cmake, including any additional custom CMake options, see below::
 
-     $ cmake ../app4triqs.src
+     $ cmake ../hartree_fock.src
 
 #. Compile the code, run the tests and install the application::
 
@@ -44,12 +44,12 @@ Installation steps
 Version compatibility
 ---------------------
 
-Keep in mind that the version of ``app4triqs`` must be compatible with your TRIQS library version,
+Keep in mind that the version of ``hartree_fock`` must be compatible with your TRIQS library version,
 see :ref:`TRIQS website <triqslibs:versions>`.
 In particular the Major and Minor Version numbers have to be the same.
 To use a particular version, go into the directory with the sources, and look at all available versions::
 
-     $ cd app4triqs.src && git tag
+     $ cd hartree_fock.src && git tag
 
 Checkout the version of the code that you want::
 
@@ -60,14 +60,14 @@ and follow steps 2 to 4 above to compile the code.
 Custom CMake options
 --------------------
 
-The compilation of ``app4triqs`` can be configured using CMake-options::
+The compilation of ``hartree_fock`` can be configured using CMake-options::
 
-    cmake ../app4triqs.src -DOPTION1=value1 -DOPTION2=value2 ...
+    cmake ../hartree_fock.src -DOPTION1=value1 -DOPTION2=value2 ...
 
 +-----------------------------------------------------------------+-----------------------------------------------+
 | Options                                                         | Syntax                                        |
 +=================================================================+===============================================+
-| Specify an installation path other than path_to_triqs           | -DCMAKE_INSTALL_PREFIX=path_to_app4triqs      |
+| Specify an installation path other than path_to_triqs           | -DCMAKE_INSTALL_PREFIX=path_to_hartree_fock      |
 +-----------------------------------------------------------------+-----------------------------------------------+
 | Build in Debugging Mode                                         | -DCMAKE_BUILD_TYPE=Debug                      |
 +-----------------------------------------------------------------+-----------------------------------------------+

@@ -1,27 +1,27 @@
 # Generated automatically using the command :
-# c++2py ../../c++/app4triqs/app4triqs.hpp -p --members_read_only -N app4triqs -a app4triqs -m app4triqs_module -o app4triqs_module --moduledoc="The app4triqs python module" -C triqs --cxxflags="-std=c++17" --target_file_only
+# c++2py ../../c++/hartree_fock/hartree_fock.hpp -p --members_read_only -N hartree_fock -a hartree_fock -m hartree_fock_module -o hartree_fock_module --moduledoc="The hartree_fock python module" -C triqs --cxxflags="-std=c++17" --target_file_only
 from cpp2py.wrap_generator import *
 
 # The module
-module = module_(full_name = "app4triqs_module", doc = r"The app4triqs python module", app_name = "app4triqs")
+module = module_(full_name = "hartree_fock_module", doc = r"The hartree_fock python module", app_name = "hartree_fock")
 
 # Imports
 
 # Add here all includes
-module.add_include("app4triqs/app4triqs.hpp")
+module.add_include("hartree_fock/hartree_fock.hpp")
 
 # Add here anything to add in the C++ code at the start, e.g. namespace using
 module.add_preamble("""
 #include <cpp2py/converters/string.hpp>
 
-using namespace app4triqs;
+using namespace hartree_fock;
 """)
 
 
 # The class toto
 c = class_(
         py_type = "Toto",  # name of the python class
-        c_type = "app4triqs::toto",   # name of the C++ class
+        c_type = "hartree_fock::toto",   # name of the C++ class
         doc = r"""A very useful and important class""",   # doc of the C++ class
         hdf5 = True,
         arithmetic = ("add_only"),
@@ -56,7 +56,7 @@ c.add_property(name = "i",
 
 module.add_class(c)
 
-module.add_function ("int app4triqs::chain (int i, int j)", doc = r"""Chain digits of two integers
+module.add_function ("int hartree_fock::chain (int i, int j)", doc = r"""Chain digits of two integers
 
 Parameters
 ----------

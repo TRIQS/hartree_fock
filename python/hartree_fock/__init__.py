@@ -25,6 +25,6 @@ r"""
 DOC
 
 """
-from .app4triqs_module import Toto, chain
+from .hartree_fock_module import Toto, chain
 
 __all__ = ['Toto', 'chain']
