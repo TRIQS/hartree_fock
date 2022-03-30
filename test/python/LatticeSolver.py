@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
-
+import numpy as np
 from hartree_fock.solver import LatticeSolver
 from triqs.gf import *
 from triqs.lattice import *
@@ -12,7 +12,7 @@ class test_lattice_solver(unittest.TestCase):
 
         BL = BravaisLattice(units = [(1,0,0) , (0,1,0) , (0,0,1)])
         BZ = BrillouinZone(BL)
-        nk=10
+        nk=5
         mk = MeshBrZone(BZ, nk)
         ekup = Gf(mesh = mk, target_shape=[2,2])
         ekdn = Gf(mesh = mk, target_shape=[2,2])
