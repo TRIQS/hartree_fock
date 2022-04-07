@@ -35,7 +35,7 @@ class LatticeSolver(object):
         self.gf_struct = gf_struct
         self.beta = beta
 
-        # self.Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
+        self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
     def solve(self, N_target, with_fock=True):
@@ -74,12 +74,15 @@ class LatticeSolver(object):
                 if bl1 == bl3 and with_fock:
                     Sigma_HF[bl1][u4, u1] -= coef * rho[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * rho[bl1][u4, u1]
+            print(flatten(Sigma_HF))
             return Sigma_HF_flat - flatten(Sigma_HF)
 
-        Sigma_HF_init = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
+        Sigma_HF_init = self.Sigma_HF
 
-        root_finder = root(f, flatten(Sigma_HF_init))
+        root_finder = root(f, flatten(Sigma_HF_init), method='lm')
         self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+        print(root_finder['success'])
+        print(root_finder['message'])
 
     def update_mean_field_dispersion(self, Sigma_HF):
         for bl, size in self.gf_struct:
@@ -91,8 +94,9 @@ class LatticeSolver(object):
         for bl, size in self.gf_struct:
             e, V = np.linalg.eigh(self.e_k_MF[bl].data)
             e -= self.mu
-        
-            self.rho[bl] = np.einsum('kab,kb,kcb->ac', V, fermi(e), V.conj())
+
+            # density matrix = Sum fermi*|psi><psi|
+            self.rho[bl] = np.einsum('kab,kb,kcb->ac', V, fermi(e), V.conj())/self.n_k
         
         return self.rho
 
@@ -110,27 +114,25 @@ class LatticeSolver(object):
                 e_min = bl_min
             if bl_max > e_max:
                 e_max = bl_max
-
         fermi = lambda e : 1./(np.exp(self.beta * e) + 1)
 
         def target_function(mu):
             n = 0
-            for bl in energies:
+            for bl, size in self.gf_struct:
                 n += np.sum(fermi(energies[bl] - mu)) / self.n_k
             return n - N_target
-
         mu = brentq(target_function, e_min, e_max)
-
+        # print('mu = ', mu)
         self.mu = mu
-        return mu      
+        return mu             
 
 def flatten(Sig_HF):
-    return np.array([Sig_bl.flatten() for bl, Sig_bl in Sig_HF.items()]).flatten()
+    return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sig_HF.items()]).flatten()
 
 def unflatten(Sig_HF_flat, gf_struct):
     offset = 0
     Sig_HF = {}
     for bl, bl_size in gf_struct:
-        Sig_HF[bl] =  Sig_HF_flat[list(range(offset, offset + bl_size**2))].reshape((bl_size, bl_size))
-        offset = offset + bl_size**2
+        Sig_HF[bl] =  Sig_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
+        offset = offset + 2*bl_size**2
     return Sig_HF
