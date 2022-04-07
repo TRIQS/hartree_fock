@@ -6,13 +6,14 @@ from hartree_fock.solver import LatticeSolver
 from triqs.gf import *
 from triqs.lattice import *
 from triqs.operators import *
+from hartree_fock.solver import flatten, unflatten
 class test_lattice_solver(unittest.TestCase):
 
     def test_run(self):
 
         # BL = BravaisLattice(units = [(1,0,0) , (0,1,0) , (0,0,1)])
         # BZ = BrillouinZone(BL)
-        # nk=5
+        # nk=10
         # mk = MeshBrZone(BZ, nk)
         # ekup = Gf(mesh = mk, target_shape=[2,2])
         # ekdn = Gf(mesh = mk, target_shape=[2,2])
@@ -41,14 +42,14 @@ class test_lattice_solver(unittest.TestCase):
 
         BL = BravaisLattice(units = [(1,0,0) , (0,1,0) , (0,0,1)])
         BZ = BrillouinZone(BL)
-        nk=1
+        nk=10
         mk = MeshBrZone(BZ, nk)
         ekup = Gf(mesh = mk, target_shape=[1,1])
         ekdn = Gf(mesh = mk, target_shape=[1,1])
 
         for k in mk:
-            ekup[k][0,0] = np.cos(k[0]) + np.cos(k[1]) + np.cos(k[2])
-            ekdn[k][0,0] = np.cos(k[0]) + np.cos(k[1]) + np.cos(k[2])
+            ekup[k][0,0] = 1*(np.cos(k[0]) + np.cos(k[1]) + np.cos(k[2]))
+            ekdn[k][0,0] = 1*(np.cos(k[0]) + np.cos(k[1]) + np.cos(k[2]))
 
         e_k = BlockGf(name_list = ['up', 'down'], block_list = [ekup, ekdn])
         gf_struct = [('up', 1), ('down', 1)]

@@ -30,6 +30,7 @@ class LatticeSolver(object):
         self.e_k = e_k.copy()
         self.e_k_MF = e_k.copy()
         self.n_k = len(self.e_k.mesh)
+        # self.mu = 0
 
         self.h_int = h_int
         self.gf_struct = gf_struct
@@ -57,10 +58,11 @@ class LatticeSolver(object):
 
         #function to pass to root finder
         def f(Sigma_HF_flat):
-            Sigma_HF = unflatten(Sigma_HF_flat, self.gf_struct)
-            self.update_mean_field_dispersion(Sigma_HF)
+            self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct))
             self.update_mu(self.N_target)
             rho = self.update_rho()
+            print(self.mu)
+            Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in self.gf_struct}
             for term, coef in self.h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
@@ -74,15 +76,12 @@ class LatticeSolver(object):
                 if bl1 == bl3 and with_fock:
                     Sigma_HF[bl1][u4, u1] -= coef * rho[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * rho[bl1][u4, u1]
-            print(flatten(Sigma_HF))
             return Sigma_HF_flat - flatten(Sigma_HF)
 
         Sigma_HF_init = self.Sigma_HF
 
-        root_finder = root(f, flatten(Sigma_HF_init), method='lm')
+        root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
         self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
-        print(root_finder['success'])
-        print(root_finder['message'])
 
     def update_mean_field_dispersion(self, Sigma_HF):
         for bl, size in self.gf_struct:
@@ -95,7 +94,7 @@ class LatticeSolver(object):
             e, V = np.linalg.eigh(self.e_k_MF[bl].data)
             e -= self.mu
 
-            # density matrix = Sum fermi*|psi><psi|
+            # density matrix = Sum fermi_function*|psi><psi|
             self.rho[bl] = np.einsum('kab,kb,kcb->ac', V, fermi(e), V.conj())/self.n_k
         
         return self.rho
@@ -114,15 +113,15 @@ class LatticeSolver(object):
                 e_min = bl_min
             if bl_max > e_max:
                 e_max = bl_max
-        fermi = lambda e : 1./(np.exp(self.beta * e) + 1)
+        fermi = lambda e : np.exp(-self.beta * e)/(1 + np.exp(-self.beta*e))
 
         def target_function(mu):
             n = 0
             for bl, size in self.gf_struct:
+                print(fermi(energies[bl] - mu))
                 n += np.sum(fermi(energies[bl] - mu)) / self.n_k
             return n - N_target
         mu = brentq(target_function, e_min, e_max)
-        # print('mu = ', mu)
         self.mu = mu
         return mu             
 
