@@ -39,27 +39,48 @@ class LatticeSolver(object):
         self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
-    def solve(self, N_target, with_fock=True):
+    def solve(self, N_target=None, mu=None, with_fock=True):
 
         """ Solve for the Hartree Fock self energy using a root finder method.
 
         Parameters
         ----------
 
-        N_target : float
-            target density per site
+        N_target : optional, float
+            target density per site. Can only be provided if mu is not provided
+
+        mu: optional, float
+            chemical potential. Can only be provided if N_target is not provided
 
         with_fock : bool
             True if the fock terms are included in the self energy
 
         """
+        # if mu is None and N_target is None:
+        #     raise ValueError('Either mu or N_target must be provided')
+        if mu is not None and N_target is not None:
+            raise ValueError('Only provide either mu or N_target, not both')
+        
+        if not N_target is None:
+            self.mode = 'fixed_density'
+            self.N_target = N_target
+        else:
+            self.mode = 'fixed_mu'
+            if not mu is none:
+                self.mu = mu
+            else:
+                self.mu = 0
 
-        self.N_target = N_target
+        if self.mode == 'fixed_density':
+            print('Running Solver at fixed density of %.4f' %self.N_target)
+        else:
+            print('Running Solver at fixed chemical potential of %.4f' %self.mu)
 
         #function to pass to root finder
         def f(Sigma_HF_flat):
             self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct))
-            self.update_mu(self.N_target)
+            if self.mode == 'fixed_density':
+                self.update_mu(self.N_target)
             rho = self.update_rho()
             # print(self.mu)
             Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in self.gf_struct}
