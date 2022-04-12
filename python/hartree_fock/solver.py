@@ -106,7 +106,14 @@ class LatticeSolver(object):
         Sigma_HF_init = self.Sigma_HF
 
         root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
-        self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+        if root_finder['success']:
+            print('Self Consistent Hartree-Fock converged successfully')
+            self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+            with np.printoptions(suppress=True, precision=3):
+                for name, bl in self.Sigma_HF.items():
+                    print('Sigma_HF[\'%s\'] ='%name, bl)
+        else:
+            print(root_finder['message'])
 
     def update_mean_field_dispersion(self, Sigma_HF):
         for bl, size in self.gf_struct:
