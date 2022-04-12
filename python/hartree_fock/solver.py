@@ -58,28 +58,32 @@ class LatticeSolver(object):
         """
         # if mu is None and N_target is None:
         #     raise ValueError('Either mu or N_target must be provided')
+        print(logo())
         if mu is not None and N_target is not None:
             raise ValueError('Only provide either mu or N_target, not both')
         
         if not N_target is None:
-            self.mode = 'fixed_density'
+            self.fixed = 'density'
             self.N_target = N_target
         else:
-            self.mode = 'fixed_mu'
+            self.fixed = 'mu'
             if not mu is none:
                 self.mu = mu
             else:
                 self.mu = 0
 
-        if self.mode == 'fixed_density':
+        if self.fixed == 'density':
             print('Running Solver at fixed density of %.4f' %self.N_target)
         else:
             print('Running Solver at fixed chemical potential of %.4f' %self.mu)
+        print('beta = %.4f' %self.beta)
+        print('h_int =', self.h_int)
+        print('Including Fock terms:', with_fock)
 
         #function to pass to root finder
         def f(Sigma_HF_flat):
             self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct))
-            if self.mode == 'fixed_density':
+            if self.fixed == 'density':
                 self.update_mu(self.N_target)
             rho = self.update_rho()
             # print(self.mu)
@@ -157,3 +161,13 @@ def unflatten(Sig_HF_flat, gf_struct):
 def fermi(e, beta):
     #numerically stable version
     return np.exp(-beta * e *(e>0))/(1 + np.exp(-beta*np.abs(e)))
+
+
+def logo():
+    logo = """
+╔╦╗╦═╗╦╔═╗ ╔═╗  ┬ ┬┌─┐
+ ║ ╠╦╝║║═╬╗╚═╗  ├─┤├┤ 
+ ╩ ╩╚═╩╚═╝╚╚═╝  ┴ ┴└  
+TRIQS: Hartree-Fock solver
+"""
+    return logo
