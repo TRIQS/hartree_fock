@@ -1,5 +1,6 @@
 import numpy as np 
 from scipy.optimize import root, brentq
+from triqs.gf import *
 
 class LatticeSolver(object):
 
@@ -39,7 +40,7 @@ class LatticeSolver(object):
         self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
-    def solve(self, N_target=None, mu=None, with_fock=True):
+    def solve(self, N_target=None, mu=None, with_fock=True, one_shot=False):
 
         """ Solve for the Hartree Fock self energy using a root finder method.
 
@@ -50,10 +51,13 @@ class LatticeSolver(object):
             target density per site. Can only be provided if mu is not provided
 
         mu: optional, float
-            chemical potential. Can only be provided if N_target is not provided
+            chemical potential. Can only be provided if N_target is not provided. Default is 0 if N_target is not provided
 
-        with_fock : bool
-            True if the fock terms are included in the self energy
+        with_fock : optional, bool
+            True if the fock terms are included in the self energy. Default is True
+
+        one_shot : optional, bool
+            True if the calcualtion is just one shot and not self consistent. Default is False
 
         """
         # if mu is None and N_target is None:
@@ -73,11 +77,15 @@ class LatticeSolver(object):
                 self.mu = 0
 
         if self.fixed == 'density':
-            print('Running Solver at fixed density of %.4f' %self.N_target)
+            print('Running Lattice Solver at fixed density of %.4f' %self.N_target)
         else:
-            print('Running Solver at fixed chemical potential of %.4f' %self.mu)
+            print('Running Lattice Solver at fixed chemical potential of %.4f' %self.mu)
         print('beta = %.4f' %self.beta)
         print('h_int =', self.h_int)
+        if one_shot:
+            print('mode: one shot')
+        else:
+            print('mode: self-consistent')
         print('Including Fock terms:', with_fock)
 
         #function to pass to root finder
@@ -86,7 +94,6 @@ class LatticeSolver(object):
             if self.fixed == 'density':
                 self.update_mu(self.N_target)
             rho = self.update_rho()
-            # print(self.mu)
             Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
             for term, coef in self.h_int:
                 bl1, u1 = term[0][1]
@@ -101,19 +108,26 @@ class LatticeSolver(object):
                 if bl1 == bl3 and with_fock:
                     Sigma_HF[bl1][u4, u1] -= coef * rho[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * rho[bl1][u4, u1]
+            if one_shot:
+                return Sigma_HF
             return Sigma_HF_flat - flatten(Sigma_HF)
 
         Sigma_HF_init = self.Sigma_HF
 
-        root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
-        if root_finder['success']:
-            print('Self Consistent Hartree-Fock converged successfully')
-            self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
-            with np.printoptions(suppress=True, precision=3):
-                for name, bl in self.Sigma_HF.items():
-                    print('Sigma_HF[\'%s\'] ='%name, bl)
-        else:
-            print(root_finder['message'])
+        if one_shot:
+            self.Sigma_HF = f(Sigma_HF_init)
+        
+        else: #self consistnet Hartree-Fock
+            root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
+            if root_finder['success']:
+                print('Self Consistent Hartree-Fock converged successfully')
+                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+                with np.printoptions(suppress=True, precision=3):
+                    for name, bl in self.Sigma_HF.items():
+                        print('Sigma_HF[\'%s\'] ='%name, bl)
+            else:
+                print('Hartree-Fock solver did not converge successfully.')
+                print(root_finder['message'])
 
     def update_mean_field_dispersion(self, Sigma_HF):
         for bl, size in self.gf_struct:
@@ -154,21 +168,129 @@ class LatticeSolver(object):
         self.mu = mu
         return mu             
 
-def flatten(Sig_HF):
-    return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sig_HF.items()]).flatten()
+class ImpuritySolver(object):
+    
+    """ Hartree-Fock Impurity solver.
 
-def unflatten(Sig_HF_flat, gf_struct):
+    Parameters
+    ----------
+
+    h_int : TRIQS Operator instance
+        Local interaction Hamiltonian
+
+    gf_struct : list of pairs [ (str,int), ...]
+        Structure of the Green's functions. It must be a
+        list of pairs, each containing the name of the
+        Green's function block as a string and the size of that block.
+        For example: ``[ ('up', 3), ('down', 3) ]``.
+
+    beta : float
+        inverse temperature
+
+    n_iw: integer, optional.
+        Number of matsubara frequencies in the Matsubara Green's function. Default is 1025. 
+
+    """
+    def __init__(self, h_int, gf_struct, beta, n_iw=1025):
+
+        self.h_int = h_int
+        self.gf_struct = gf_struct
+        self.beta = beta
+        self.n_iw = n_iw
+
+        self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
+
+        name_list = []
+        block_list = []
+        for bl_name, bl_size in self.gf_struct:
+            name_list.append(bl_name)
+            block_list.append(GfImFreq(beta=beta, n_points=n_iw, target_shape=[bl_size, bl_size]))
+        self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
+
+    def solve(self, with_fock=True, one_shot=False):
+
+        """ Solve for the Hartree Fock self energy using a root finder method.
+
+        Parameters
+        ----------
+        with_fock : optional, bool
+            True if the fock terms are included in the self energy. Default is True
+
+        one_shot : optional, bool
+            True if the calcualtion is just one shot and not self consistent. Default is False
+
+        """
+
+        print(logo())
+        print('Running Impurity Solver')
+        print('beta = %.4f' %self.beta)
+        print('h_int =', self.h_int)
+        if one_shot:
+            print('mode: one shot')
+        else:
+            print('mode: self-consistent')
+        print('Including Fock terms:', with_fock)
+
+        def f(Sigma_HF_flat):
+
+            Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
+            G_iw = self.G0_iw.copy()
+            G_dens = {}
+            for bl, G0_bl in self.G0_iw:
+                G_iw[bl] << inverse(inverse(G0_bl) - unflatten(Sigma_HF_flat, gf_struct))
+                G_dens[bl] = G_iw[bl].density().real
+        
+            for term, coef in h_int:
+                bl1, u1 = term[0][1]
+                bl2, u2 = term[3][1]
+                bl3, u3 = term[1][1]
+                bl4, u4 = term[2][1]
+
+                assert(bl1 == bl2 and bl3 == bl4)
+
+                Sigma_HF[bl1][u2, u1] += coef * G_dens[bl3][u4, u3]
+                Sigma_HF[bl3][u4, u3] += coef * G_dens[bl1][u2, u1]
+
+                if bl1 == bl3 and with_fock:
+                    [bl1][u4, u1] -= coef * G_dens[bl3][u2, u3]
+                    Sigma_HF[bl3][u2, u3] -= coef * G_dens[bl1][u4, u1]
+        
+            if one_shot:
+                return Sigma_HF
+            return Sigma_HF_flat - flatten(Sigma_HF)
+
+        Sigma_HF_init = self.Sigma_HF
+
+        if one_shot:
+            self.Sigma_HF = f(Sigma_HF_init)
+        
+        else: #self consistnet Hartree-Fock
+            root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
+            if root_finder['success']:
+                print('Self Consistent Hartree-Fock converged successfully')
+                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+                with np.printoptions(suppress=True, precision=3):
+                    for name, bl in self.Sigma_HF.items():
+                        print('Sigma_HF[\'%s\'] ='%name, bl)
+            else:
+                print('Hartree-Fock solver did not converge successfully.')
+                print(root_finder['message'])
+
+
+def flatten(Sigma_HF):
+    return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sigma_HF.items()]).flatten()
+
+def unflatten(Sigma_HF_flat, gf_struct):
     offset = 0
-    Sig_HF = {}
+    Sigma_HF = {}
     for bl, bl_size in gf_struct:
-        Sig_HF[bl] =  Sig_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
+        Sigma_HF[bl] =  Sigma_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
         offset = offset + 2*bl_size**2
-    return Sig_HF
+    return Sigma_HF
 
 def fermi(e, beta):
     #numerically stable version
     return np.exp(-beta * e *(e>0))/(1 + np.exp(-beta*np.abs(e)))
-
 
 def logo():
     logo = """
