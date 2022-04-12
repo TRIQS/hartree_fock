@@ -61,7 +61,7 @@ class LatticeSolver(object):
             self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct))
             self.update_mu(self.N_target)
             rho = self.update_rho()
-            print(self.mu)
+            # print(self.mu)
             Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in self.gf_struct}
             for term, coef in self.h_int:
                 bl1, u1 = term[0][1]
@@ -89,13 +89,12 @@ class LatticeSolver(object):
 
     def update_rho(self):
 
-        fermi = lambda e : 1./(np.exp(self.beta * e) + 1)
         for bl, size in self.gf_struct:
             e, V = np.linalg.eigh(self.e_k_MF[bl].data)
             e -= self.mu
 
             # density matrix = Sum fermi_function*|psi><psi|
-            self.rho[bl] = np.einsum('kab,kb,kcb->ac', V, fermi(e), V.conj())/self.n_k
+            self.rho[bl] = np.einsum('kab,kb,kcb->ac', V, fermi(e, self.beta), V.conj())/self.n_k
         
         return self.rho
 
@@ -113,13 +112,11 @@ class LatticeSolver(object):
                 e_min = bl_min
             if bl_max > e_max:
                 e_max = bl_max
-        fermi = lambda e : np.exp(-self.beta * e)/(1 + np.exp(-self.beta*e))
 
         def target_function(mu):
             n = 0
             for bl, size in self.gf_struct:
-                print(fermi(energies[bl] - mu))
-                n += np.sum(fermi(energies[bl] - mu)) / self.n_k
+                n += np.sum(fermi(energies[bl] - mu, self.beta)) / self.n_k
             return n - N_target
         mu = brentq(target_function, e_min, e_max)
         self.mu = mu
@@ -135,3 +132,7 @@ def unflatten(Sig_HF_flat, gf_struct):
         Sig_HF[bl] =  Sig_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
         offset = offset + 2*bl_size**2
     return Sig_HF
+
+def fermi(e, beta):
+    #numerically stable version
+    return np.exp(-beta * e *(e>0))/(1 + np.exp(-beta*np.abs(e)))
