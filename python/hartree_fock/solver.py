@@ -36,7 +36,7 @@ class LatticeSolver(object):
         self.gf_struct = gf_struct
         self.beta = beta
 
-        self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in gf_struct}
+        self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
     def solve(self, N_target=None, mu=None, with_fock=True):
@@ -83,7 +83,7 @@ class LatticeSolver(object):
                 self.update_mu(self.N_target)
             rho = self.update_rho()
             # print(self.mu)
-            Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=np.complex_) for bl, bl_size in self.gf_struct}
+            Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
             for term, coef in self.h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
