@@ -236,12 +236,12 @@ class ImpuritySolver(object):
             Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
             G_iw = self.G0_iw.copy()
             G_dens = {}
-            Sigma_unflattened = unflatten(Sigma_HF_flat, gf_struct)
+            Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct)
             for bl, G0_bl in self.G0_iw:
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
                 G_dens[bl] = G_iw[bl].density().real
         
-            for term, coef in h_int:
+            for term, coef in self.h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
                 bl3, u3 = term[1][1]
