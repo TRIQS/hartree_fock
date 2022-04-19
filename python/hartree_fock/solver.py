@@ -9,7 +9,7 @@ class LatticeSolver(object):
     Parameters
     ----------
 
-    e_k : TRIQS BlockGF on a Brillouin zone mesh
+    h0_k : TRIQS BlockGF on a Brillouin zone mesh
         Single-particle dispersion.
 
     h_int : TRIQS Operator instance
@@ -29,11 +29,11 @@ class LatticeSolver(object):
 
     """
 
-    def __init__(self, e_k, h_int, gf_struct, beta, symmetries=[]):
+    def __init__(self, h0_k, h_int, gf_struct, beta, symmetries=[]):
 
-        self.e_k = e_k.copy()
-        self.e_k_MF = e_k.copy()
-        self.n_k = len(self.e_k.mesh)
+        self.h0_k = h0_k.copy()
+        self.h0_k_MF = h0_k.copy()
+        self.n_k = len(self.h0_k.mesh)
         # self.mu = 0
 
         self.h_int = h_int
@@ -137,12 +137,12 @@ class LatticeSolver(object):
 
     def update_mean_field_dispersion(self, Sigma_HF):
         for bl, size in self.gf_struct:
-            self.e_k_MF[bl].data[:] = self.e_k[bl].data + Sigma_HF[bl][None, ...]
+            self.h0_k_MF[bl].data[:] = self.h0_k[bl].data + Sigma_HF[bl][None, ...]
 
     def update_rho(self):
 
         for bl, size in self.gf_struct:
-            e, V = np.linalg.eigh(self.e_k_MF[bl].data)
+            e, V = np.linalg.eigh(self.h0_k_MF[bl].data)
             e -= self.mu
 
             # density matrix = Sum fermi_function*|psi><psi|
@@ -157,7 +157,7 @@ class LatticeSolver(object):
         e_min = np.inf
         e_max = -np.inf
         for bl, size in self.gf_struct:
-            energies[bl] = np.linalg.eigvalsh(self.e_k_MF[bl].data)
+            energies[bl] = np.linalg.eigvalsh(self.h0_k_MF[bl].data)
             bl_min = energies[bl].min()
             bl_max = energies[bl].max()
             if bl_min < e_min:

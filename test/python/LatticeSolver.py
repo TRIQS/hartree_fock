@@ -25,11 +25,11 @@ class test_lattice_solver(unittest.TestCase):
             ekup[k][0,0] = 1*(np.cos(k[0]) + np.cos(k[1]) + np.cos(k[2]))
             ekdn[k][0,0] = 1*(np.cos(k[0]) + np.cos(k[1]) + np.cos(k[2]))
 
-        e_k = BlockGf(name_list = ['up', 'down'], block_list = [ekup, ekdn])
+        h0_k = BlockGf(name_list = ['up', 'down'], block_list = [ekup, ekdn])
         gf_struct = [('up', 1), ('down', 1)]
         h_int = 3*n('up',0)*n('down',0)
 
-        S = LatticeSolver(e_k=e_k, h_int=h_int, gf_struct=gf_struct, beta=40)
+        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40)
         S.solve(N_target=1, with_fock=True)
 
         with HDFArchive('one_band.ref.h5', 'r') as ar:
@@ -46,7 +46,7 @@ class test_lattice_solver(unittest.TestCase):
             Symmetrized_Sigma['down'] = Symmetrized_Sigma['up']
             return Symmetrized_Sigma
 
-        S = LatticeSolver(e_k=e_k, h_int=h_int, gf_struct=gf_struct, beta=40, symmetries=[make_spins_equal])
+        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40, symmetries=[make_spins_equal])
         S.solve(N_target=1, with_fock=True)
         np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[0,0], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
@@ -71,12 +71,12 @@ class test_lattice_solver(unittest.TestCase):
             ekdn[k][0,1] = 0.1*np.cos(k[1])
             ekdn[k][1,0] = 0.1*np.cos(k[1])
 
-        e_k = BlockGf(name_list = ['up', 'down'], block_list = [ekup, ekdn])
+        h0_k = BlockGf(name_list = ['up', 'down'], block_list = [ekup, ekdn])
         gf_struct = [('up', 2), ('down', 2)]
 
         h_int = 3*n('up', 0)*n('down', 0) + 3*n('up', 1)*n('down', 1) + 2.5*n('up', 0)*n('down', 1)
 
-        S = LatticeSolver(e_k=e_k, h_int=h_int, gf_struct=gf_struct, beta=40)
+        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40)
         S.solve(N_target=2, with_fock=True)
         with HDFArchive('multi_band.ref.h5', 'r') as ar:
             Sigma_ref = ar['Sigma']
