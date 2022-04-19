@@ -24,12 +24,15 @@ class LatticeSolver(object):
     beta : float
         inverse temperature
 
-    beta : optional, list of functions
+    symmeties : optional, list of functions
         symmetry functions acting on self energy at each consistent step
+
+    force_real : optional, bool
+        True if the self energy is forced to be real
 
     """
 
-    def __init__(self, h0_k, h_int, gf_struct, beta, symmetries=[]):
+    def __init__(self, h0_k, h_int, gf_struct, beta, symmetries=[], force_real=False):
 
         self.h0_k = h0_k.copy()
         self.h0_k_MF = h0_k.copy()
@@ -40,8 +43,12 @@ class LatticeSolver(object):
         self.gf_struct = gf_struct
         self.beta = beta
         self.symmetries = symmetries
+        self.force_real = force_real
 
-        self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
+        if self.force_real:
+            self.Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
+        else:
+            self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
     def solve(self, N_target=None, mu=None, with_fock=True, one_shot=False):
@@ -94,11 +101,14 @@ class LatticeSolver(object):
 
         #function to pass to root finder
         def f(Sigma_HF_flat):
-            self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct))
+            self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct, real=self.force_real))
             if self.fixed == 'density':
                 self.update_mu(self.N_target)
             rho = self.update_rho()
-            Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
+            if self.force_real:
+                Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
+            else:
+                Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
             for term, coef in self.h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
@@ -116,18 +126,18 @@ class LatticeSolver(object):
                 Sigma_HF = function(Sigma_HF)
             if one_shot:
                 return Sigma_HF
-            return Sigma_HF_flat - flatten(Sigma_HF)
+            return Sigma_HF_flat - flatten(Sigma_HF, real=self.force_real)
 
         Sigma_HF_init = self.Sigma_HF
 
         if one_shot:
             self.Sigma_HF = f(Sigma_HF_init)
         
-        else: #self consistnet Hartree-Fock
+        else: #self consistent Hartree-Fock
             root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
             if root_finder['success']:
                 print('Self Consistent Hartree-Fock converged successfully')
-                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
                 with np.printoptions(suppress=True, precision=3):
                     for name, bl in self.Sigma_HF.items():
                         print('Sigma_HF[\'%s\'] ='%name, bl)
@@ -284,15 +294,22 @@ class ImpuritySolver(object):
                 print(root_finder['message'])
 
 
-def flatten(Sigma_HF):
-    return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sigma_HF.items()]).flatten()
+def flatten(Sigma_HF, real=False):
+    if real:
+        return np.array([Sig_bl.flatten() for bl, Sig_bl in Sigma_HF.items()]).flatten()
+    else:
+        return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sigma_HF.items()]).flatten()
 
-def unflatten(Sigma_HF_flat, gf_struct):
+def unflatten(Sigma_HF_flat, gf_struct, real=False):
     offset = 0
     Sigma_HF = {}
     for bl, bl_size in gf_struct:
-        Sigma_HF[bl] =  Sigma_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
-        offset = offset + 2*bl_size**2
+        if real:
+            Sigma_HF[bl] =  Sigma_HF_flat[list(range(offset, offset + bl_size**2))].reshape((bl_size, bl_size))
+            offset = offset + bl_size**2
+        else:
+            Sigma_HF[bl] =  Sigma_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
+            offset = offset + 2*bl_size**2
     return Sigma_HF
 
 def fermi(e, beta):
