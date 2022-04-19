@@ -39,6 +39,20 @@ class test_lattice_solver(unittest.TestCase):
         np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.mu, mu_ref)
 
+        #test with forced symmetry
+        def make_spins_equal(Sigma):
+            Symmetrized_Sigma = Sigma.copy()
+            Symmetrized_Sigma['up'] = 0.5*(Sigma['up']  + Sigma['down'])
+            Symmetrized_Sigma['down'] = Symmetrized_Sigma['up']
+            return Symmetrized_Sigma
+
+        S = LatticeSolver(e_k=e_k, h_int=h_int, gf_struct=gf_struct, beta=40, symmetries=[make_spins_equal])
+        S.solve(N_target=1, with_fock=True)
+        np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[0,0], rtol=0, atol=1e-10)
+        np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
+        np.testing.assert_allclose(S.mu, mu_ref)
+
+
     def test_multi_band(self):
 
         BL = BravaisLattice(units = [(1,0,0) , (0,1,0) , (0,0,1)])
