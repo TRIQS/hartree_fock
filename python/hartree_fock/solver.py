@@ -71,7 +71,7 @@ class LatticeSolver(object):
             self.N_target = N_target
         else:
             self.fixed = 'mu'
-            if not mu is none:
+            if not mu is None:
                 self.mu = mu
             else:
                 self.mu = 0
