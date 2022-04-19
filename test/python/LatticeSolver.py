@@ -52,6 +52,13 @@ class test_lattice_solver(unittest.TestCase):
         np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.mu, mu_ref)
 
+        #test forcing Sigma to be real
+        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40, force_real=True)
+        S.solve(N_target=1, with_fock=True)
+        np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[0,0], rtol=0, atol=1e-10)
+        np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
+        np.testing.assert_allclose(S.mu, mu_ref)
+
 
     def test_multi_band(self):
 
