@@ -24,9 +24,12 @@ class LatticeSolver(object):
     beta : float
         inverse temperature
 
+    beta : optional, list of functions
+        symmetry functions acting on self energy at each consistent step
+
     """
 
-    def __init__(self, e_k, h_int, gf_struct, beta):
+    def __init__(self, e_k, h_int, gf_struct, beta, symmetries=[]):
 
         self.e_k = e_k.copy()
         self.e_k_MF = e_k.copy()
@@ -36,6 +39,7 @@ class LatticeSolver(object):
         self.h_int = h_int
         self.gf_struct = gf_struct
         self.beta = beta
+        self.symmetries = symmetries
 
         self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
@@ -108,6 +112,8 @@ class LatticeSolver(object):
                 if bl1 == bl3 and with_fock:
                     Sigma_HF[bl1][u4, u1] -= coef * rho[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * rho[bl1][u4, u1]
+            for function in self.symmetries:
+                Sigma_HF = function(Sigma_HF)
             if one_shot:
                 return Sigma_HF
             return Sigma_HF_flat - flatten(Sigma_HF)
