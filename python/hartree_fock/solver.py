@@ -308,12 +308,21 @@ class ImpuritySolver(object):
 
 
 def flatten(Sigma_HF, real=False):
+    """
+    Flatten a dictionary of 2D Numpy arrays into a 1D Numpy array.
+    Use real=True if the Numpy arrays have a real dtype. 
+    """
     if real:
         return np.array([Sig_bl.flatten() for bl, Sig_bl in Sigma_HF.items()]).flatten()
     else:
         return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sigma_HF.items()]).flatten()
 
 def unflatten(Sigma_HF_flat, gf_struct, real=False):
+    """
+    Unflatten a 1D Numpy array back to a dictionary of 2D Numpy arrays, based on the structure in gf_struct.
+    Use real=True if the Numpy arrays have a real dtype. 
+    """
+
     offset = 0
     Sigma_HF = {}
     for bl, bl_size in gf_struct:
@@ -326,7 +335,9 @@ def unflatten(Sigma_HF_flat, gf_struct, real=False):
     return Sigma_HF
 
 def fermi(e, beta):
-    #numerically stable version
+    """
+    Numerically stable version of the Fermi function
+    """
     return np.exp(-beta * e *(e>0))/(1 + np.exp(-beta*np.abs(e)))
 
 def logo():
