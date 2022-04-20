@@ -72,7 +72,7 @@ class LatticeSolver(object):
 
         tol: optional, float
             Convergence tolerance to pass to root finder
-            
+
         """
         # if mu is None and N_target is None:
         #     raise ValueError('Either mu or N_target must be provided')
@@ -212,13 +212,17 @@ class ImpuritySolver(object):
     n_iw: integer, optional.
         Number of matsubara frequencies in the Matsubara Green's function. Default is 1025. 
 
+    symmeties : optional, list of functions
+        symmetry functions acting on self energy at each consistent step
+
     """
-    def __init__(self, h_int, gf_struct, beta, n_iw=1025):
+    def __init__(self, h_int, gf_struct, beta, n_iw=1025, symmetries=[]):
 
         self.h_int = h_int
         self.gf_struct = gf_struct
         self.beta = beta
         self.n_iw = n_iw
+        self.symmetries = symmetries
 
         self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
 
@@ -278,6 +282,9 @@ class ImpuritySolver(object):
                     [bl1][u4, u1] -= coef * G_dens[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * G_dens[bl1][u4, u1]
         
+            for function in self.symmetries:
+                Sigma_HF = function(Sigma_HF)
+
             if one_shot:
                 return Sigma_HF
             return Sigma_HF_flat - flatten(Sigma_HF)
