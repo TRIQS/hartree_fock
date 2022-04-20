@@ -25,6 +25,5 @@ r"""
 DOC
 
 """
-from .hartree_fock_module import Toto, chain
 
-__all__ = ['Toto', 'chain']
+__all__ = []
