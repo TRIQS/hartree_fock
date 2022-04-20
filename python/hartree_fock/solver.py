@@ -51,7 +51,7 @@ class LatticeSolver(object):
             self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
-    def solve(self, N_target=None, mu=None, with_fock=True, one_shot=False):
+    def solve(self, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
 
         """ Solve for the Hartree Fock self energy using a root finder method.
 
@@ -70,6 +70,9 @@ class LatticeSolver(object):
         one_shot : optional, bool
             True if the calcualtion is just one shot and not self consistent. Default is False
 
+        tol: optional, float
+            Convergence tolerance to pass to root finder
+            
         """
         # if mu is None and N_target is None:
         #     raise ValueError('Either mu or N_target must be provided')
@@ -100,7 +103,7 @@ class LatticeSolver(object):
         print('Including Fock terms:', with_fock)
 
         #function to pass to root finder
-        def f(Sigma_HF_flat):
+        def target_function(Sigma_HF_flat):
             self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct, real=self.force_real))
             if self.fixed == 'density':
                 self.update_mu(self.N_target)
@@ -131,10 +134,13 @@ class LatticeSolver(object):
         Sigma_HF_init = self.Sigma_HF
 
         if one_shot:
-            self.Sigma_HF = f(Sigma_HF_init)
+            self.Sigma_HF = target_function(Sigma_HF_init)
         
         else: #self consistent Hartree-Fock
-            root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
+            if tol is None:
+                root_finder = root(target_function, flatten(Sigma_HF_init), method='broyden1')
+            else:
+                root_finder = root(target_function, flatten(Sigma_HF_init), method='broyden1', tol=tol)
             if root_finder['success']:
                 print('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
