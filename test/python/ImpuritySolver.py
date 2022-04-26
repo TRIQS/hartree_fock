@@ -36,7 +36,6 @@ class test_impurity_solver(unittest.TestCase):
         SK = SumkDiscreteFromLattice(lattice=TBL, n_points=nk)
         sigma = GfImFreq(beta=beta, n_points=1025, target_shape=[1,1])
         Sigma = BlockGf(name_list=['up', 'down'], block_list=(sigma,sigma), make_copies=True)
-        SK(mu=0, Sigma=Sigma).density()
         Gloc = Sigma.copy()
         # density_required = 1
         mu = 0
@@ -56,6 +55,12 @@ class test_impurity_solver(unittest.TestCase):
                 converged = True
         Sigma_imp = S.Sigma_HF
         mu_imp = mu
+
+        #test storing to and loading from h5
+        with HDFArchive('impurity_results.h5', 'w') as ar:
+            ar['solver'] = S
+        with HDFArchive('impurity_results.h5', 'r') as ar:
+            S = ar['solver']
 
         BL = BravaisLattice(units = [(1,0,0) , (0,1,0)])
         BZ = BrillouinZone(BL)

@@ -95,5 +95,11 @@ class test_lattice_solver(unittest.TestCase):
         np.testing.assert_allclose(S.rho['down'], rho_ref[2:,2:], rtol=0, atol=1e-5)
         np.testing.assert_allclose(S.mu, mu_ref)
 
+        #test storing to and loading from h5
+        with HDFArchive('lattice_results.h5', 'w') as ar:
+            ar['solver'] = S
+        with HDFArchive('lattice_results.h5', 'r') as ar:
+            S = ar['solver']
+
 if __name__ == '__main__':
     unittest.main()
