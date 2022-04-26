@@ -279,7 +279,7 @@ class ImpuritySolver(object):
                 Sigma_HF[bl3][u4, u3] += coef * G_dens[bl1][u2, u1]
 
                 if bl1 == bl3 and with_fock:
-                    [bl1][u4, u1] -= coef * G_dens[bl3][u2, u3]
+                    Sigma_HF[bl1][u4, u1] -= coef * G_dens[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * G_dens[bl1][u4, u1]
         
             for function in self.symmetries:
@@ -363,7 +363,7 @@ def fermi(e, beta):
 
     beta: float
         Inverse temperature 
-        
+
     """
     return np.exp(-beta * e *(e>0))/(1 + np.exp(-beta*np.abs(e)))
 
