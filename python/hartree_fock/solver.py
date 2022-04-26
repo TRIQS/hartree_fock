@@ -310,7 +310,15 @@ class ImpuritySolver(object):
 def flatten(Sigma_HF, real=False):
     """
     Flatten a dictionary of 2D Numpy arrays into a 1D Numpy array.
-    Use real=True if the Numpy arrays have a real dtype. 
+
+    Parameters
+    ----------
+    Sigma_HF : dictionary of 2D arrays
+    
+    real : optional, bool
+        True if the Numpy arrays have a real dtype. Default is False.
+
+
     """
     if real:
         return np.array([Sig_bl.flatten() for bl, Sig_bl in Sigma_HF.items()]).flatten()
@@ -320,7 +328,17 @@ def flatten(Sigma_HF, real=False):
 def unflatten(Sigma_HF_flat, gf_struct, real=False):
     """
     Unflatten a 1D Numpy array back to a dictionary of 2D Numpy arrays, based on the structure in gf_struct.
-    Use real=True if the Numpy arrays have a real dtype. 
+
+    Parameters
+    ----------
+    Sigma_HF_flat : 1D Numpy array
+
+    gf_struct: list of pairs [ (str,int), ...]
+        Structure of the Green's functions. Used to
+        construct the dictionary of 2D arrays. 
+    
+    real : optional, bool
+        True if the Numpy array has a real dtype. Default is False.
     """
 
     offset = 0
@@ -337,6 +355,15 @@ def unflatten(Sigma_HF_flat, gf_struct, real=False):
 def fermi(e, beta):
     """
     Numerically stable version of the Fermi function
+
+    Parameters
+    ----------
+    e : float or ndarray
+        Energy minus chemical potential
+
+    beta: float
+        Inverse temperature 
+        
     """
     return np.exp(-beta * e *(e>0))/(1 + np.exp(-beta*np.abs(e)))
 
