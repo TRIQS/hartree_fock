@@ -55,6 +55,7 @@ class LatticeSolver(object):
     def solve(self, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
 
         """ Solve for the Hartree Fock self energy using a root finder method.
+        The self energy is stored in the ``Sigma_HF`` object of the LatticeSolver instance.
 
         Parameters
         ----------
@@ -233,10 +234,13 @@ class ImpuritySolver(object):
             name_list.append(bl_name)
             block_list.append(GfImFreq(beta=beta, n_points=n_iw, target_shape=[bl_size, bl_size]))
         self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
+        self.G_iw = self.G0_iw.copy()
 
     def solve(self, with_fock=True, one_shot=False):
 
         """ Solve for the Hartree Fock self energy using a root finder method.
+        The self energy is stored in the ``Sigma_HF`` object of the ImpuritySolver instance.
+        The Green's function is stored in the ``G_iw`` object of the ImpuritySolver instance. 
 
         Parameters
         ----------
@@ -294,6 +298,9 @@ class ImpuritySolver(object):
 
         if one_shot:
             self.Sigma_HF = f(Sigma_HF_init)
+            for bl, G0_bl in self.G0_iw:
+                self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
+
         
         else: #self consistnet Hartree-Fock
             root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
@@ -303,10 +310,23 @@ class ImpuritySolver(object):
                 with np.printoptions(suppress=True, precision=3):
                     for name, bl in self.Sigma_HF.items():
                         mpi.report('Sigma_HF[\'%s\'] ='%name, bl)
+                for bl, G0_bl in self.G0_iw:
+                    self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
+
             else:
                 mpi.report('Hartree-Fock solver did not converge successfully.')
                 mpi.report(root_finder['message'])
 
+
+    def interaction_energy(self):
+
+        """ Calculate the interaction energy
+
+        """
+        E = 0        
+        for bl, gbl in self.G_iw:
+            E += 0.5 * np.trace(self.Sigma_HF[bl].dot(gbl.density()))
+        return E
 
 def flatten(Sigma_HF, real=False):
     """
