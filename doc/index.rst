@@ -28,6 +28,7 @@ Learn how to use hartree_fock in the :ref:`documentation`.
 
    install
    documentation
+   tutorials
    issues
    ChangeLog.md
    about
