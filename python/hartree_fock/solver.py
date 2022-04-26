@@ -1,6 +1,7 @@
 import numpy as np 
 from scipy.optimize import root, brentq
 from triqs.gf import *
+import triqs.utility.mpi as mpi
 
 class LatticeSolver(object):
 
@@ -76,7 +77,7 @@ class LatticeSolver(object):
         """
         # if mu is None and N_target is None:
         #     raise ValueError('Either mu or N_target must be provided')
-        print(logo())
+        mpi.report(logo())
         if mu is not None and N_target is not None:
             raise ValueError('Only provide either mu or N_target, not both')
         
@@ -91,16 +92,16 @@ class LatticeSolver(object):
                 self.mu = 0
 
         if self.fixed == 'density':
-            print('Running Lattice Solver at fixed density of %.4f' %self.N_target)
+            mpi.report('Running Lattice Solver at fixed density of %.4f' %self.N_target)
         else:
-            print('Running Lattice Solver at fixed chemical potential of %.4f' %self.mu)
-        print('beta = %.4f' %self.beta)
-        print('h_int =', self.h_int)
+            mpi.report('Running Lattice Solver at fixed chemical potential of %.4f' %self.mu)
+        mpi.report('beta = %.4f' %self.beta)
+        mpi.report('h_int =', self.h_int)
         if one_shot:
-            print('mode: one shot')
+            mpi.report('mode: one shot')
         else:
-            print('mode: self-consistent')
-        print('Including Fock terms:', with_fock)
+            mpi.report('mode: self-consistent')
+        mpi.report('Including Fock terms:', with_fock)
 
         #function to pass to root finder
         def target_function(Sigma_HF_flat):
@@ -142,14 +143,14 @@ class LatticeSolver(object):
             else:
                 root_finder = root(target_function, flatten(Sigma_HF_init), method='broyden1', tol=tol)
             if root_finder['success']:
-                print('Self Consistent Hartree-Fock converged successfully')
+                mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
                 with np.printoptions(suppress=True, precision=3):
                     for name, bl in self.Sigma_HF.items():
-                        print('Sigma_HF[\'%s\'] ='%name, bl)
+                        mpi.report('Sigma_HF[\'%s\'] ='%name, bl)
             else:
-                print('Hartree-Fock solver did not converge successfully.')
-                print(root_finder['message'])
+                mpi.report('Hartree-Fock solver did not converge successfully.')
+                mpi.report(root_finder['message'])
 
     def update_mean_field_dispersion(self, Sigma_HF):
         for bl, size in self.gf_struct:
@@ -247,15 +248,15 @@ class ImpuritySolver(object):
 
         """
 
-        print(logo())
-        print('Running Impurity Solver')
-        print('beta = %.4f' %self.beta)
-        print('h_int =', self.h_int)
+        mpi.report(logo())
+        mpi.report('Running Impurity Solver')
+        mpi.report('beta = %.4f' %self.beta)
+        mpi.report('h_int =', self.h_int)
         if one_shot:
-            print('mode: one shot')
+            mpi.report('mode: one shot')
         else:
-            print('mode: self-consistent')
-        print('Including Fock terms:', with_fock)
+            mpi.report('mode: self-consistent')
+        mpi.report('Including Fock terms:', with_fock)
 
         def f(Sigma_HF_flat):
 
@@ -297,14 +298,14 @@ class ImpuritySolver(object):
         else: #self consistnet Hartree-Fock
             root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
             if root_finder['success']:
-                print('Self Consistent Hartree-Fock converged successfully')
+                mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
                 with np.printoptions(suppress=True, precision=3):
                     for name, bl in self.Sigma_HF.items():
-                        print('Sigma_HF[\'%s\'] ='%name, bl)
+                        mpi.report('Sigma_HF[\'%s\'] ='%name, bl)
             else:
-                print('Hartree-Fock solver did not converge successfully.')
-                print(root_finder['message'])
+                mpi.report('Hartree-Fock solver did not converge successfully.')
+                mpi.report(root_finder['message'])
 
 
 def flatten(Sigma_HF, real=False):
