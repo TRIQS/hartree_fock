@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import root, brentq
 from triqs.gf import *
 import triqs.utility.mpi as mpi
+from h5.formats import register_class
 
 class LatticeSolver(object):
 
@@ -38,7 +39,6 @@ class LatticeSolver(object):
         self.h0_k = h0_k.copy()
         self.h0_k_MF = h0_k.copy()
         self.n_k = len(self.h0_k.mesh)
-        # self.mu = 0
 
         self.h_int = h_int
         self.gf_struct = gf_struct
@@ -192,6 +192,32 @@ class LatticeSolver(object):
         self.mu = mu
         return mu             
 
+    def __reduce_to_dict__(self):
+        store_dict = {'h0_k': self.h0_k, 'h0_k_MF': self.h0_k_MF, 'n_k': self.n_k,
+                      'h_int': self.h_int, 'gf_struct': self.gf_struct, 'beta': self.beta,
+                      'symmetries': self.symmetries, 'force_real': self.force_real,
+                      'Sigma_HF': self.Sigma_HF, 'rho': self.rho, }
+        if hasattr(self, 'mu'):
+            store_dict['mu'] = self.mu
+
+        return store_dict
+
+    @classmethod
+    def __factory_from_dict__(cls,name,D) :
+
+        instance = cls(D['h0_k'], D['h_int'], D['gf_struct'], D['beta'],
+                       D['symmetries'], D['force_real'])
+
+        instance.h0_k_MF = D['h0_k_MF']
+        instance.n_k = D['n_k']
+        instance.Sigma_HF = D['Sigma_HF']
+        instance.rho = D['rho']
+        if 'mu' in D:
+            instance.mu = D['mu']
+
+        return instance
+
+
 class ImpuritySolver(object):
     
     """ Hartree-Fock Impurity solver.
@@ -302,7 +328,7 @@ class ImpuritySolver(object):
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
 
         
-        else: #self consistnet Hartree-Fock
+        else: #self consistent Hartree-Fock
             root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
@@ -327,6 +353,22 @@ class ImpuritySolver(object):
         for bl, gbl in self.G_iw:
             E += 0.5 * np.trace(self.Sigma_HF[bl].dot(gbl.density()))
         return E
+
+    def __reduce_to_dict__(self):
+        store_dict = {'n_iw': self.n_iw, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
+                      'h_int': self.h_int, 'gf_struct': self.gf_struct, 'beta': self.beta,
+                      'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF}
+        return store_dict
+
+    @classmethod
+    def __factory_from_dict__(cls,name,D) :
+
+        instance = cls(D['h_int'], D['gf_struct'], D['beta'], D['n_iw'], D['symmetries'])
+        instance.Sigma_HF = D['Sigma_HF']
+        instance.G0_iw = D['G0_iw']
+        instance.G_iw = D['G_iw']
+        return instance
+
 
 def flatten(Sigma_HF, real=False):
     """
@@ -372,6 +414,7 @@ def unflatten(Sigma_HF_flat, gf_struct, real=False):
             Sigma_HF[bl] =  Sigma_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
             offset = offset + 2*bl_size**2
     return Sigma_HF
+    
 
 def fermi(e, beta):
     """
@@ -396,3 +439,6 @@ def logo():
 TRIQS: Hartree-Fock solver
 """
     return logo
+
+register_class(LatticeSolver)
+register_class(ImpuritySolver)
