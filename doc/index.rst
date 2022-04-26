@@ -14,7 +14,7 @@ hartree_fock
          :target: https://github.com/triqs/hartree_fock
 
 
-An example application using cpp2py and :ref:`TRIQS <triqslibs:welcome>`.
+An application based on :ref:`TRIQS <triqslibs:welcome>` for using the Hartree-Fock method to solve lattice and impurity problems.
 
 This documentation is generated based on `rst <https://de.wikipedia.org/wiki/ReStructuredText>`_ files
 and the comments in the sources and headers.

@@ -22,7 +22,7 @@
 ################################################################################
 
 r"""
-DOC
+module containing Hartree-Fock lattice and impurity solvers
 
 """
 

@@ -3,6 +3,6 @@
 About hartree_fock
 ***************
 
-An example application using ``cpp2py`` and TRIQS.
+An example application using TRIQS.
 
-Written and maintained by N. Wentzell with contributions from H. U.R. Strand.
+Written by J. Karp with contributions from A. Hampel and N. Wentzell.
