@@ -148,7 +148,10 @@ class LatticeSolver(object):
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
                 with np.printoptions(suppress=True, precision=3):
                     for name, bl in self.Sigma_HF.items():
-                        mpi.report('Sigma_HF[\'%s\'] ='%name, bl)
+                        mpi.report('Sigma_HF[\'%s\']:'%name)
+                        mpi.report(bl)
+                    mpi.report('mu = %.4f' %self.mu)
+
             else:
                 mpi.report('Hartree-Fock solver did not converge successfully.')
                 mpi.report(root_finder['message'])
@@ -333,9 +336,11 @@ class ImpuritySolver(object):
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+                mpi.report('Calculated self energy:')
                 with np.printoptions(suppress=True, precision=3):
                     for name, bl in self.Sigma_HF.items():
-                        mpi.report('Sigma_HF[\'%s\'] ='%name, bl)
+                        mpi.report('Sigma_HF[\'%s\']:'%name)
+                        mpi.report(bl)
                 for bl, G0_bl in self.G0_iw:
                     self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
 
