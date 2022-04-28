@@ -14,9 +14,6 @@ class LatticeSolver(object):
     h0_k : TRIQS BlockGF on a Brillouin zone mesh
         Single-particle dispersion.
 
-    h_int : TRIQS Operator instance
-        Local interaction Hamiltonian
-
     gf_struct : list of pairs [ (str,int), ...]
         Structure of the Green's functions. It must be a
         list of pairs, each containing the name of the
@@ -34,13 +31,12 @@ class LatticeSolver(object):
 
     """
 
-    def __init__(self, h0_k, h_int, gf_struct, beta, symmetries=[], force_real=False):
+    def __init__(self, h0_k, gf_struct, beta, symmetries=[], force_real=False):
 
         self.h0_k = h0_k.copy()
         self.h0_k_MF = h0_k.copy()
         self.n_k = len(self.h0_k.mesh)
 
-        self.h_int = h_int
         self.gf_struct = gf_struct
         self.beta = beta
         self.symmetries = symmetries
@@ -52,13 +48,16 @@ class LatticeSolver(object):
             self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
-    def solve(self, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
-
+    def solve(self, h_int, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
+        
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the LatticeSolver instance.
 
         Parameters
         ----------
+
+        h_int : TRIQS Operator instance
+            Local interaction Hamiltonian
 
         N_target : optional, float
             target density per site. Can only be provided if mu is not provided
@@ -76,8 +75,7 @@ class LatticeSolver(object):
             Convergence tolerance to pass to root finder
 
         """
-        # if mu is None and N_target is None:
-        #     raise ValueError('Either mu or N_target must be provided')
+        self.last_solve_params = {key: val for key, val in locals().items() if key != 'self'}
         mpi.report(logo())
         if mu is not None and N_target is not None:
             raise ValueError('Only provide either mu or N_target, not both')
@@ -97,7 +95,7 @@ class LatticeSolver(object):
         else:
             mpi.report('Running Lattice Solver at fixed chemical potential of %.4f' %self.mu)
         mpi.report('beta = %.4f' %self.beta)
-        mpi.report('h_int =', self.h_int)
+        mpi.report('h_int =', h_int)
         if one_shot:
             mpi.report('mode: one shot')
         else:
@@ -114,7 +112,7 @@ class LatticeSolver(object):
                 Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
             else:
                 Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
-            for term, coef in self.h_int:
+            for term, coef in h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
                 bl3, u3 = term[1][1]
@@ -197,7 +195,7 @@ class LatticeSolver(object):
 
     def __reduce_to_dict__(self):
         store_dict = {'h0_k': self.h0_k, 'h0_k_MF': self.h0_k_MF, 'n_k': self.n_k,
-                      'h_int': self.h_int, 'gf_struct': self.gf_struct, 'beta': self.beta,
+                      'gf_struct': self.gf_struct, 'beta': self.beta,
                       'symmetries': self.symmetries, 'force_real': self.force_real,
                       'Sigma_HF': self.Sigma_HF, 'rho': self.rho, }
         if hasattr(self, 'mu'):
@@ -208,8 +206,7 @@ class LatticeSolver(object):
     @classmethod
     def __factory_from_dict__(cls,name,D) :
 
-        instance = cls(D['h0_k'], D['h_int'], D['gf_struct'], D['beta'],
-                       D['symmetries'], D['force_real'])
+        instance = cls(D['h0_k'], D['gf_struct'], D['beta'], D['symmetries'], D['force_real'])
 
         instance.h0_k_MF = D['h0_k_MF']
         instance.n_k = D['n_k']
@@ -228,9 +225,6 @@ class ImpuritySolver(object):
     Parameters
     ----------
 
-    h_int : TRIQS Operator instance
-        Local interaction Hamiltonian
-
     gf_struct : list of pairs [ (str,int), ...]
         Structure of the Green's functions. It must be a
         list of pairs, each containing the name of the
@@ -247,9 +241,8 @@ class ImpuritySolver(object):
         symmetry functions acting on self energy at each consistent step
 
     """
-    def __init__(self, h_int, gf_struct, beta, n_iw=1025, symmetries=[]):
+    def __init__(self, gf_struct, beta, n_iw=1025, symmetries=[]):
 
-        self.h_int = h_int
         self.gf_struct = gf_struct
         self.beta = beta
         self.n_iw = n_iw
@@ -265,7 +258,7 @@ class ImpuritySolver(object):
         self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
         self.G_iw = self.G0_iw.copy()
 
-    def solve(self, with_fock=True, one_shot=False):
+    def solve(self, h_int, with_fock=True, one_shot=False):
 
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the ImpuritySolver instance.
@@ -273,6 +266,10 @@ class ImpuritySolver(object):
 
         Parameters
         ----------
+
+        h_int : TRIQS Operator instance
+            Local interaction Hamiltonian
+
         with_fock : optional, bool
             True if the fock terms are included in the self energy. Default is True
 
@@ -284,7 +281,7 @@ class ImpuritySolver(object):
         mpi.report(logo())
         mpi.report('Running Impurity Solver')
         mpi.report('beta = %.4f' %self.beta)
-        mpi.report('h_int =', self.h_int)
+        mpi.report('h_int =', h_int)
         if one_shot:
             mpi.report('mode: one shot')
         else:
@@ -301,7 +298,7 @@ class ImpuritySolver(object):
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
                 G_dens[bl] = G_iw[bl].density().real
         
-            for term, coef in self.h_int:
+            for term, coef in h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
                 bl3, u3 = term[1][1]
@@ -361,14 +358,14 @@ class ImpuritySolver(object):
 
     def __reduce_to_dict__(self):
         store_dict = {'n_iw': self.n_iw, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
-                      'h_int': self.h_int, 'gf_struct': self.gf_struct, 'beta': self.beta,
+                      'gf_struct': self.gf_struct, 'beta': self.beta,
                       'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF}
         return store_dict
 
     @classmethod
     def __factory_from_dict__(cls,name,D) :
 
-        instance = cls(D['h_int'], D['gf_struct'], D['beta'], D['n_iw'], D['symmetries'])
+        instance = cls(D['gf_struct'], D['beta'], D['n_iw'], D['symmetries'])
         instance.Sigma_HF = D['Sigma_HF']
         instance.G0_iw = D['G0_iw']
         instance.G_iw = D['G_iw']

@@ -29,8 +29,8 @@ class test_lattice_solver(unittest.TestCase):
         gf_struct = [('up', 1), ('down', 1)]
         h_int = 3*n('up',0)*n('down',0)
 
-        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40)
-        S.solve(N_target=1, with_fock=True)
+        S = LatticeSolver(h0_k=h0_k, gf_struct=gf_struct, beta=40)
+        S.solve(h_int=h_int, N_target=1, with_fock=True)
 
         with HDFArchive('one_band.ref.h5', 'r') as ar:
             Sigma_ref = ar['Sigma']
@@ -46,15 +46,15 @@ class test_lattice_solver(unittest.TestCase):
             Symmetrized_Sigma['down'] = Symmetrized_Sigma['up']
             return Symmetrized_Sigma
 
-        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40, symmetries=[make_spins_equal])
-        S.solve(N_target=1, with_fock=True)
+        S = LatticeSolver(h0_k=h0_k, gf_struct=gf_struct, beta=40, symmetries=[make_spins_equal])
+        S.solve(h_int=h_int, N_target=1, with_fock=True)
         np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[0,0], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.mu, mu_ref)
 
         #test forcing Sigma to be real
-        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40, force_real=True)
-        S.solve(N_target=1, with_fock=True)
+        S = LatticeSolver(h0_k=h0_k, gf_struct=gf_struct, beta=40, force_real=True)
+        S.solve(h_int=h_int, N_target=1, with_fock=True)
         np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[0,0], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[1,1], rtol=0, atol=1e-10)
         np.testing.assert_allclose(S.mu, mu_ref)
@@ -83,8 +83,8 @@ class test_lattice_solver(unittest.TestCase):
 
         h_int = 3*n('up', 0)*n('down', 0) + 3*n('up', 1)*n('down', 1) + 2.5*n('up', 0)*n('down', 1)
 
-        S = LatticeSolver(h0_k=h0_k, h_int=h_int, gf_struct=gf_struct, beta=40)
-        S.solve(N_target=2, with_fock=True)
+        S = LatticeSolver(h0_k=h0_k, gf_struct=gf_struct, beta=40)
+        S.solve(h_int=h_int, N_target=2, with_fock=True)
         with HDFArchive('multi_band.ref.h5', 'r') as ar:
             Sigma_ref = ar['Sigma']
             mu_ref = ar['mu']
