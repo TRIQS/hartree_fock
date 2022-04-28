@@ -2,11 +2,11 @@
 
 import unittest
 import numpy as np
-from hartree_fock.solver import LatticeSolver
+from hartree_fock.lattice import LatticeSolver
 from triqs.gf import *
 from triqs.lattice import *
 from triqs.operators import *
-from hartree_fock.solver import flatten, unflatten
+from hartree_fock.utils import flatten, unflatten
 from h5 import HDFArchive
 
 class test_lattice_solver(unittest.TestCase):
