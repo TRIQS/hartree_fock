@@ -85,7 +85,11 @@ class ImpuritySolver(object):
 
         def f(Sigma_HF_flat):
 
-            Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
+            if self.force_real:
+                Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
+            else:
+                Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
+
             G_iw = self.G0_iw.copy()
             G_dens = {}
             Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct, self.force_real)
