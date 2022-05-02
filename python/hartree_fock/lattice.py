@@ -1,3 +1,4 @@
+import copy
 import numpy as np 
 from scipy.optimize import root, brentq
 from triqs.gf import *
@@ -53,6 +54,8 @@ class LatticeSolver(object):
         
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the LatticeSolver instance.
+        If a fixed target density ``N_target`` is given, then the chemical potential is calculated
+        and stored in the ``mu`` object of the LatticeSolver instance.
 
         Parameters
         ----------
@@ -145,10 +148,11 @@ class LatticeSolver(object):
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
-                with np.printoptions(suppress=True, precision=3):
+                with np.printoptions(suppress=True, precision=4):
                     for name, bl in self.Sigma_HF.items():
                         mpi.report('Sigma_HF[\'%s\']:'%name)
                         mpi.report(bl)
+                if self.fixed == 'density':
                     mpi.report('mu = %.4f' %self.mu)
 
             else:
@@ -166,7 +170,13 @@ class LatticeSolver(object):
             e -= self.mu
 
             # density matrix = Sum fermi_function*|psi><psi|
-            self.rho[bl] = np.einsum('kab,kb,kcb->ac', V, fermi(e, self.beta), V.conj())/self.n_k
+            dm = np.einsum('kab,kb,kcb->ac', V, fermi(e, self.beta), V.conj())/self.n_k
+            if self.force_real:
+                max_imag = dm.imag.max()
+                if max_imag > 1e-10:
+                    mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f'%max_imag)
+                dm = dm.real
+            self.rho[bl] = dm
         
         return self.rho
 
@@ -201,6 +211,13 @@ class LatticeSolver(object):
                       'Sigma_HF': self.Sigma_HF, 'rho': self.rho, }
         if hasattr(self, 'mu'):
             store_dict['mu'] = self.mu
+        if hasattr(self, 'last_solve_params'):
+            params_copy = copy.deepcopy(self.last_solve_params)
+            if params_copy['mu'] is None:
+                params_copy['mu'] = 'none'
+            if params_copy['tol'] is None:
+                params_copy['tol'] = 'none'
+            store_dict['last_solve_params'] = params_copy
 
         return store_dict
 
@@ -215,7 +232,13 @@ class LatticeSolver(object):
         instance.rho = D['rho']
         if 'mu' in D:
             instance.mu = D['mu']
-
+        if 'last_solve_params' in D:
+            params = copy.deepcopy(D['last_solve_params'])
+            if params['mu'] == 'none':
+                params['mu'] = None
+            if params['tol'] == 'none':
+                params['tol'] = None
+            instance.last_solve_params = params
         return instance
 
 register_class(LatticeSolver)

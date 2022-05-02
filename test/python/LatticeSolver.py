@@ -89,17 +89,18 @@ class test_lattice_solver(unittest.TestCase):
             Sigma_ref = ar['Sigma']
             mu_ref = ar['mu']
             rho_ref = ar['rho']
-        np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[:2,:2], rtol=0, atol=1e-5)
-        np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[2:,2:], rtol=0, atol=1e-5)
-        np.testing.assert_allclose(S.rho['up'], rho_ref[:2,:2], rtol=0, atol=1e-5)
-        np.testing.assert_allclose(S.rho['down'], rho_ref[2:,2:], rtol=0, atol=1e-5)
-        np.testing.assert_allclose(S.mu, mu_ref)
 
         #test storing to and loading from h5
         with HDFArchive('lattice_results.h5', 'w') as ar:
             ar['solver'] = S
         with HDFArchive('lattice_results.h5', 'r') as ar:
             S = ar['solver']
+        np.testing.assert_allclose(S.Sigma_HF['up'], Sigma_ref[:2,:2], rtol=0, atol=1e-5)
+        np.testing.assert_allclose(S.Sigma_HF['down'], Sigma_ref[2:,2:], rtol=0, atol=1e-5)
+        np.testing.assert_allclose(S.rho['up'], rho_ref[:2,:2], rtol=0, atol=1e-5)
+        np.testing.assert_allclose(S.rho['down'], rho_ref[2:,2:], rtol=0, atol=1e-5)
+        np.testing.assert_allclose(S.mu, mu_ref)
+
 
 if __name__ == '__main__':
     unittest.main()

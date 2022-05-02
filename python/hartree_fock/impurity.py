@@ -64,7 +64,7 @@ class ImpuritySolver(object):
             True if the calcualtion is just one shot and not self consistent. Default is False
 
         """
-
+        self.last_solve_params = {key: val for key, val in locals().items() if key != 'self'}
         mpi.report(logo())
         mpi.report('Running Impurity Solver')
         mpi.report('beta = %.4f' %self.beta)
@@ -121,7 +121,7 @@ class ImpuritySolver(object):
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
                 mpi.report('Calculated self energy:')
-                with np.printoptions(suppress=True, precision=3):
+                with np.printoptions(suppress=True, precision=4):
                     for name, bl in self.Sigma_HF.items():
                         mpi.report('Sigma_HF[\'%s\']:'%name)
                         mpi.report(bl)
@@ -148,6 +148,8 @@ class ImpuritySolver(object):
                       'gf_struct': self.gf_struct, 'beta': self.beta,
                       'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF}
         return store_dict
+        if hasattr(self, 'last_solve_params'):
+            store_dict['last_solve_params'] = self.last_solve_params
 
     @classmethod
     def __factory_from_dict__(cls,name,D) :
@@ -156,6 +158,9 @@ class ImpuritySolver(object):
         instance.Sigma_HF = D['Sigma_HF']
         instance.G0_iw = D['G0_iw']
         instance.G_iw = D['G_iw']
+        if 'last_solve_params' in D:
+            instance.last_solve_params = D['last_solve_params']
+
         return instance
 
 register_class(ImpuritySolver)
