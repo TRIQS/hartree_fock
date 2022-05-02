@@ -27,13 +27,17 @@ class ImpuritySolver(object):
     symmeties : optional, list of functions
         symmetry functions acting on self energy at each consistent step
 
+    force_real : optional, bool
+        True if the self energy is forced to be real
+
     """
-    def __init__(self, gf_struct, beta, n_iw=1025, symmetries=[]):
+    def __init__(self, gf_struct, beta, n_iw=1025, symmetries=[], force_real=False):
 
         self.gf_struct = gf_struct
         self.beta = beta
         self.n_iw = n_iw
         self.symmetries = symmetries
+        self.force_real = force_real
 
         self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
 
@@ -44,6 +48,7 @@ class ImpuritySolver(object):
             block_list.append(GfImFreq(beta=beta, n_points=n_iw, target_shape=[bl_size, bl_size]))
         self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
         self.G_iw = self.G0_iw.copy()
+        self.git_hash = "@PROJECT_GIT_HASH@"
 
     def solve(self, h_int, with_fock=True, one_shot=False):
 
@@ -83,8 +88,13 @@ class ImpuritySolver(object):
             Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct)
             for bl, G0_bl in self.G0_iw:
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
-                G_dens[bl] = G_iw[bl].density().real
-        
+                G_dens[bl] = G_iw[bl].density()
+                if force_real:
+                    max_imag = G_dens[bl].imag.max()
+                    if max_imag > 1e-10:
+                        mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f'%max_imag)
+                    G_dens[bl] = G_dens[bl].real
+
             for term, coef in h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
@@ -144,9 +154,11 @@ class ImpuritySolver(object):
         return E
 
     def __reduce_to_dict__(self):
+        print(type(self.git_hash))
         store_dict = {'n_iw': self.n_iw, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
                       'gf_struct': self.gf_struct, 'beta': self.beta,
-                      'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF}
+                      'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF,
+                      'git_hash': self.git_hash}
         return store_dict
         if hasattr(self, 'last_solve_params'):
             store_dict['last_solve_params'] = self.last_solve_params
@@ -158,6 +170,7 @@ class ImpuritySolver(object):
         instance.Sigma_HF = D['Sigma_HF']
         instance.G0_iw = D['G0_iw']
         instance.G_iw = D['G_iw']
+        instance.git_hash = D['git_hash']
         if 'last_solve_params' in D:
             instance.last_solve_params = D['last_solve_params']
 

@@ -50,6 +50,8 @@ class LatticeSolver(object):
             self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
         self.rho = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
 
+        self.git_hash = "@PROJECT_GIT_HASH@"
+
     def solve(self, h_int, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
         
         """ Solve for the Hartree Fock self energy using a root finder method.
@@ -208,7 +210,7 @@ class LatticeSolver(object):
         store_dict = {'h0_k': self.h0_k, 'h0_k_MF': self.h0_k_MF, 'n_k': self.n_k,
                       'gf_struct': self.gf_struct, 'beta': self.beta,
                       'symmetries': self.symmetries, 'force_real': self.force_real,
-                      'Sigma_HF': self.Sigma_HF, 'rho': self.rho, }
+                      'Sigma_HF': self.Sigma_HF, 'rho': self.rho, 'git_hash': self.git_hash}
         if hasattr(self, 'mu'):
             store_dict['mu'] = self.mu
         if hasattr(self, 'last_solve_params'):
@@ -230,6 +232,7 @@ class LatticeSolver(object):
         instance.n_k = D['n_k']
         instance.Sigma_HF = D['Sigma_HF']
         instance.rho = D['rho']
+        instance.git_hash = D['git_hash']
         if 'mu' in D:
             instance.mu = D['mu']
         if 'last_solve_params' in D:
