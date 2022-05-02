@@ -39,7 +39,10 @@ class ImpuritySolver(object):
         self.symmetries = symmetries
         self.force_real = force_real
 
-        self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
+        if force_real:
+            self.Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
+        else:
+            self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
 
         name_list = []
         block_list = []
@@ -85,11 +88,11 @@ class ImpuritySolver(object):
             Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
             G_iw = self.G0_iw.copy()
             G_dens = {}
-            Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct)
+            Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct, self.force_real)
             for bl, G0_bl in self.G0_iw:
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
                 G_dens[bl] = G_iw[bl].density()
-                if force_real:
+                if self.force_real:
                     max_imag = G_dens[bl].imag.max()
                     if max_imag > 1e-10:
                         mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f'%max_imag)
@@ -115,7 +118,7 @@ class ImpuritySolver(object):
 
             if one_shot:
                 return Sigma_HF
-            return Sigma_HF_flat - flatten(Sigma_HF)
+            return Sigma_HF_flat - flatten(Sigma_HF, self.force_real)
 
         Sigma_HF_init = self.Sigma_HF
 
@@ -126,10 +129,10 @@ class ImpuritySolver(object):
 
         
         else: #self consistent Hartree-Fock
-            root_finder = root(f, flatten(Sigma_HF_init), method='broyden1')
+            root_finder = root(f, flatten(Sigma_HF_init, self.force_real), method='broyden1')
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
-                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct)
+                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
                 mpi.report('Calculated self energy:')
                 with np.printoptions(suppress=True, precision=4):
                     for name, bl in self.Sigma_HF.items():
