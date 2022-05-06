@@ -1,11 +1,11 @@
 .. _welcome:
 
 hartree_fock
-*********
+************
 
-.. sidebar:: hartree_fock 3.0.0
+.. sidebar:: hartree_fock 3.1.0
 
-   This is the homepage of hartree_fock v3.0.0.
+   This is the homepage of hartree_fock v3.1.0.
    For changes see the :ref:`changelog page <changelog>`.
       
       .. image:: _static/logo_github.png

@@ -12,4 +12,4 @@ Python reference manual
    :template: autosummary_module_template.rst
    :recursive:
 
-    hartree_fock
+   hartree_fock
