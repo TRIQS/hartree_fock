@@ -1,8 +1,8 @@
-hartree_fock - An example application using triqs and cpp2py
+hartree_fock - Hartree-Fock lattice and impurity solvers based on the TRIQS library 
 
-Copyright (C) 2017-2018, N. Wentzell, O. Parcollet
-Copyright (C) 2018-2019, The Simons Foundation
-  authors: N. Wentzell, D. Simons, H. Strand, O. Parcollet
+Copyright (C) 2022 by The Simons Foundation
+  authors: Jonathan Karp, Alexander Hampel, Nils Wentzell, Hugo U. R. Strand, 
+           Olivier Parcollet
 
 hartree_fock is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software

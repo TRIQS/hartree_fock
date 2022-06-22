@@ -1,12 +1,30 @@
-import numpy as np 
+# Copyright (c) 2022 Simons Foundation
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You may obtain a copy of the License at
+#     https:#www.gnu.org/licenses/gpl-3.0.txt
+#
+# Authors: Jonathan Karp, Alexander Hampel, Nils Wentzell, Hugo U. R. Strand, Olivier Parcollet
+
+import numpy as np
 from scipy.optimize import root
 from triqs.gf import *
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
 from .utils import *
 
+
 class ImpuritySolver(object):
-    
+
     """ Hartree-Fock Impurity solver.
 
     Parameters
@@ -22,7 +40,7 @@ class ImpuritySolver(object):
         inverse temperature
 
     n_iw: integer, optional.
-        Number of matsubara frequencies in the Matsubara Green's function. Default is 1025. 
+        Number of matsubara frequencies in the Matsubara Green's function. Default is 1025.
 
     symmeties : optional, list of functions
         symmetry functions acting on self energy at each consistent step
@@ -31,6 +49,7 @@ class ImpuritySolver(object):
         True if the self energy is forced to be real
 
     """
+
     def __init__(self, gf_struct, beta, n_iw=1025, symmetries=[], force_real=False):
 
         self.gf_struct = gf_struct
@@ -54,10 +73,9 @@ class ImpuritySolver(object):
         self.git_hash = "@PROJECT_GIT_HASH@"
 
     def solve(self, h_int, with_fock=True, one_shot=False):
-
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the ImpuritySolver instance.
-        The Green's function is stored in the ``G_iw`` object of the ImpuritySolver instance. 
+        The Green's function is stored in the ``G_iw`` object of the ImpuritySolver instance.
 
         Parameters
         ----------
@@ -75,7 +93,7 @@ class ImpuritySolver(object):
         self.last_solve_params = {key: val for key, val in locals().items() if key != 'self'}
         mpi.report(logo())
         mpi.report('Running Impurity Solver')
-        mpi.report('beta = %.4f' %self.beta)
+        mpi.report('beta = %.4f' % self.beta)
         mpi.report('h_int =', h_int)
         if one_shot:
             mpi.report('mode: one shot')
@@ -99,7 +117,7 @@ class ImpuritySolver(object):
                 if self.force_real:
                     max_imag = G_dens[bl].imag.max()
                     if max_imag > 1e-10:
-                        mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f'%max_imag)
+                        mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f' % max_imag)
                     G_dens[bl] = G_dens[bl].real
 
             for term, coef in h_int:
@@ -116,7 +134,7 @@ class ImpuritySolver(object):
                 if bl1 == bl3 and with_fock:
                     Sigma_HF[bl1][u4, u1] -= coef * G_dens[bl3][u2, u3]
                     Sigma_HF[bl3][u2, u3] -= coef * G_dens[bl1][u4, u1]
-        
+
             for function in self.symmetries:
                 Sigma_HF = function(Sigma_HF)
 
@@ -131,8 +149,7 @@ class ImpuritySolver(object):
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
 
-        
-        else: #self consistent Hartree-Fock
+        else:  # self consistent Hartree-Fock
             root_finder = root(f, flatten(Sigma_HF_init, self.force_real), method='broyden1')
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
@@ -140,7 +157,7 @@ class ImpuritySolver(object):
                 mpi.report('Calculated self energy:')
                 with np.printoptions(suppress=True, precision=4):
                     for name, bl in self.Sigma_HF.items():
-                        mpi.report('Sigma_HF[\'%s\']:'%name)
+                        mpi.report('Sigma_HF[\'%s\']:' % name)
                         mpi.report(bl)
                 for bl, G0_bl in self.G0_iw:
                     self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
@@ -149,13 +166,11 @@ class ImpuritySolver(object):
                 mpi.report('Hartree-Fock solver did not converge successfully.')
                 mpi.report(root_finder['message'])
 
-
     def interaction_energy(self):
-
         """ Calculate the interaction energy
 
         """
-        E = 0        
+        E = 0
         for bl, gbl in self.G_iw:
             E += 0.5 * np.trace(self.Sigma_HF[bl].dot(gbl.density()))
         return E
@@ -171,7 +186,7 @@ class ImpuritySolver(object):
             store_dict['last_solve_params'] = self.last_solve_params
 
     @classmethod
-    def __factory_from_dict__(cls,name,D) :
+    def __factory_from_dict__(cls, name, D):
 
         instance = cls(D['gf_struct'], D['beta'], D['n_iw'], D['symmetries'])
         instance.Sigma_HF = D['Sigma_HF']
@@ -182,5 +197,6 @@ class ImpuritySolver(object):
             instance.last_solve_params = D['last_solve_params']
 
         return instance
+
 
 register_class(ImpuritySolver)

@@ -1,10 +1,28 @@
+# Copyright (c) 2022 Simons Foundation
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You may obtain a copy of the License at
+#     https:#www.gnu.org/licenses/gpl-3.0.txt
+#
+# Authors: Jonathan Karp, Alexander Hampel, Nils Wentzell, Hugo U. R. Strand, Olivier Parcollet
+
 import copy
-import numpy as np 
+import numpy as np
 from scipy.optimize import root, brentq
 from triqs.gf import *
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
 from .utils import *
+
 
 class LatticeSolver(object):
 
@@ -53,7 +71,6 @@ class LatticeSolver(object):
         self.git_hash = "@PROJECT_GIT_HASH@"
 
     def solve(self, h_int, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
-        
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the LatticeSolver instance.
         If a fixed target density ``N_target`` is given, then the chemical potential is calculated
@@ -85,7 +102,7 @@ class LatticeSolver(object):
         mpi.report(logo())
         if mu is not None and N_target is not None:
             raise ValueError('Only provide either mu or N_target, not both')
-        
+
         if not N_target is None:
             self.fixed = 'density'
             self.N_target = N_target
@@ -97,10 +114,10 @@ class LatticeSolver(object):
                 self.mu = 0
 
         if self.fixed == 'density':
-            mpi.report('Running Lattice Solver at fixed density of %.4f' %self.N_target)
+            mpi.report('Running Lattice Solver at fixed density of %.4f' % self.N_target)
         else:
-            mpi.report('Running Lattice Solver at fixed chemical potential of %.4f' %self.mu)
-        mpi.report('beta = %.4f' %self.beta)
+            mpi.report('Running Lattice Solver at fixed chemical potential of %.4f' % self.mu)
+        mpi.report('beta = %.4f' % self.beta)
         mpi.report('h_int =', h_int)
         if one_shot:
             mpi.report('mode: one shot')
@@ -108,7 +125,7 @@ class LatticeSolver(object):
             mpi.report('mode: self-consistent')
         mpi.report('Including Fock terms:', with_fock)
 
-        #function to pass to root finder
+        # function to pass to root finder
         def target_function(Sigma_HF_flat):
             self.update_mean_field_dispersion(unflatten(Sigma_HF_flat, self.gf_struct, real=self.force_real))
             if self.fixed == 'density':
@@ -141,8 +158,8 @@ class LatticeSolver(object):
 
         if one_shot:
             self.Sigma_HF = target_function(Sigma_HF_init)
-        
-        else: #self consistent Hartree-Fock
+
+        else:  # self consistent Hartree-Fock
             if tol is None:
                 root_finder = root(target_function, flatten(Sigma_HF_init), method='broyden1')
             else:
@@ -152,10 +169,10 @@ class LatticeSolver(object):
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
                 with np.printoptions(suppress=True, precision=4):
                     for name, bl in self.Sigma_HF.items():
-                        mpi.report('Sigma_HF[\'%s\']:'%name)
+                        mpi.report('Sigma_HF[\'%s\']:' % name)
                         mpi.report(bl)
                 if self.fixed == 'density':
-                    mpi.report('mu = %.4f' %self.mu)
+                    mpi.report('mu = %.4f' % self.mu)
 
             else:
                 mpi.report('Hartree-Fock solver did not converge successfully.')
@@ -176,13 +193,12 @@ class LatticeSolver(object):
             if self.force_real:
                 max_imag = dm.imag.max()
                 if max_imag > 1e-10:
-                    mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f'%max_imag)
+                    mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f' % max_imag)
                 dm = dm.real
             self.rho[bl] = dm
-        
+
         return self.rho
 
-    
     def update_mu(self, N_target):
 
         energies = {}
@@ -204,7 +220,7 @@ class LatticeSolver(object):
             return n - N_target
         mu = brentq(target_function, e_min, e_max)
         self.mu = mu
-        return mu             
+        return mu
 
     def __reduce_to_dict__(self):
         store_dict = {'h0_k': self.h0_k, 'h0_k_MF': self.h0_k_MF, 'n_k': self.n_k,
@@ -224,7 +240,7 @@ class LatticeSolver(object):
         return store_dict
 
     @classmethod
-    def __factory_from_dict__(cls,name,D) :
+    def __factory_from_dict__(cls, name, D):
 
         instance = cls(D['h0_k'], D['gf_struct'], D['beta'], D['symmetries'], D['force_real'])
 
@@ -243,5 +259,6 @@ class LatticeSolver(object):
                 params['tol'] = None
             instance.last_solve_params = params
         return instance
+
 
 register_class(LatticeSolver)
