@@ -16,6 +16,7 @@
 # Authors: Jonathan Karp, Alexander Hampel, Nils Wentzell, Hugo U. R. Strand, Olivier Parcollet
 
 import numpy as np
+import triqs.utility.mpi as mpi
 
 
 def flatten(Sigma_HF, real=False):
@@ -78,6 +79,68 @@ def fermi(e, beta):
 
     """
     return np.exp(-beta * e * (e > 0))/(1 + np.exp(-beta*np.abs(e)))
+
+def compute_DC_from_density(N_up, N_down, U, J, n_orbitals=5,  method='cFLL', spin_channel=None):
+    """
+    To integrate with SUMK
+    Returns a float for the DC correction  
+
+
+    Parameters
+    ----------
+    N_up : float 
+        Spin up total density
+    
+    N_down : float 
+        Spin down total density
+
+    U : float 
+        U value
+
+    J : float 
+        J value
+
+    n_orbitals : int, default = 5
+        Total number of orbitals
+    
+    spin_channel : string, default = None
+        For which spin channel you are computing the DC correction for, possibilities :
+        -   None: no spin resolved
+        -   up: up channel
+        -   down: down channel
+    
+    method : string, default = 'cFLL' 
+        possibilities:
+        -    cFLL: DC potential from Ryee for spin unpolarized DFT: (DOI: 10.1038/s41598-018-27731-4)
+        -    sFLL: TO IMPLEMENT, same as above for spin polarized DFT
+        -    cAMF: TO IMPLEMENT
+        -    sAMF: TO IMPLEMENT
+        -    cHeld: unpolarized Held's formula as reported in (DOI: 10.1103/PhysRevResearch.2.03308)
+        -    sHeld: polarized Held's formula as reported in (DOI: 10.1103/PhysRevResearch.2.03308)
+    """
+    N_tot = N_up + N_down
+
+    match method:
+        case 'cFLL':
+            DC_val = U * (N_tot-0.5) - J *(N_tot*0.5-0.5)
+
+        case 'sFLL':
+            if spin_channel == 'up':
+                DC_val = U * (N_tot-0.5) - J *(N_up-0.5)
+            elif spin_channel == 'down':
+                DC_val = U * (N_tot-0.5) - J *(N_down-0.5)
+            else:
+                raise ValueError(f"spin_channel set to {spin_channel}, please select 'up' or 'down'")
+        
+        case 'cHeld':
+            U_mean = U * (n_orbitals-1)*(U-2*J)+(n_orbitals-1)*(U-3*J)/(2*n_orbitals-1)
+            DC_val = U_mean * (N_tot-0.5)
+
+    mpi.report(f"DC computed using the {method} method for a value of {DC_val:.6f} eV")
+    if 'Held' in method:
+        mpi.report(f"Held method for {n_orbitals} orbitals, computed U_mean={U_mean:.6f} eV")
+
+    return DC_val
 
 
 def logo():
