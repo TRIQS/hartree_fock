@@ -13,8 +13,10 @@
 # You may obtain a copy of the License at
 #     https:#www.gnu.org/licenses/gpl-3.0.txt
 #
-# Authors: Jonathan Karp, Alexander Hampel, Nils Wentzell, Hugo U. R. Strand, Olivier Parcollet
+# Authors: Jonathan Karp, Alexander Hampel, Alberto Carta, Nils Wentzell, Hugo U. R. Strand, Olivier Parcollet
 
+import os
+import contextlib
 import numpy as np
 from scipy.optimize import root
 from triqs.gf import *
@@ -26,7 +28,9 @@ from triqs_dft_tools.sumk_dft import compute_DC_from_density
 
 class ImpuritySolver(object):
 
-    """ Hartree-Fock Impurity solver.
+    """ Hartree-Fock Impurity solver. The solver provides a constant sigma which rigidly shifts the local orbital levels
+        The solver is always initialized without double counting and it is left to the user to provide the relevant dc values
+        before calling the solve() method.
 
     Parameters
     ----------
@@ -40,11 +44,11 @@ class ImpuritySolver(object):
     beta : float
         inverse temperature
     
-    U : float
-        Hubbard U parameter
+    dc_U : float
+        Hubbard U parameter used in the double counting computation
     
-    J : float
-        J parameter (computed from the slater integral)
+    dc_J : float
+        J parameter used in the double counting computation
 
     n_iw: integer, optional.
         Number of matsubara frequencies in the Matsubara Green's function. Default is 1025.
@@ -55,21 +59,30 @@ class ImpuritySolver(object):
     force_real : optional, bool
         True if the self energy is forced to be real
 
-    DC_method : optional, string
-        Method used for DC computation to pass to sumk.compute_DC_from_density(). Default is 'cFLL'
-
     """
 
-    def __init__(self, gf_struct, beta, U, J, n_iw=1025, symmetries=[], force_real=False, DC_method='cFLL'):
+    def __init__(self, gf_struct, beta, n_orb, dc=False , dc_U=0.0, dc_J=0.0, n_iw=1025, symmetries=[],  force_real=False):
 
         self.gf_struct = gf_struct
         self.beta = beta
+        self.n_orb = n_orb
         self.n_iw = n_iw
         self.symmetries = symmetries
         self.force_real = force_real
-        self.U = U
-        self.J = J
+        
+        #defaults for DC relevant values
+        self.dc = dc          # whether to compute dc value
+        self.dc_type = 'cFLL'    # method used for dc_calculation, for options see 
+        self.dc_U = dc_U
+        self.dc_J = dc_J
+        self.dc_factor = 1.0
 
+        self.dc_fixed_occ = None
+        self.dc_fixed_value = None
+
+        # Here Sigma_HF gets initialized to numerical zeros
+        # If you want to change this guess, use the method
+        # reinitialize_sigma before calling the solve() method
         if force_real:
             self.Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
         else:
@@ -84,7 +97,7 @@ class ImpuritySolver(object):
         self.G_iw = self.G0_iw.copy()
         self.git_hash = "@PROJECT_GIT_HASH@"
 
-    def solve(self, h_int, with_fock=True, one_shot=False):
+    def solve(self, h_int, with_fock=True, one_shot=True):
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the ImpuritySolver instance.
         The Green's function is stored in the ``G_iw`` object of the ImpuritySolver instance.
@@ -109,12 +122,26 @@ class ImpuritySolver(object):
         mpi.report('beta = %.4f' % self.beta)
         mpi.report('h_int =', h_int)
         if one_shot:
-            mpi.report('mode: one shot')
+            mpi.report('HARTREE SOLVER: starting solver in one-shot mode')
         else:
-            mpi.report('mode: self-consistent')
+            mpi.report('HARTREE SOLVER: starting solver in self-consistent mode')
         mpi.report('Including Fock terms:', with_fock)
 
-        def compute_sigma_hartree(Sigma_HF_flat):
+        def compute_sigma_hartree(Sigma_HF_flat, return_everything=True):
+            """ Inner function dedicated to computing
+
+            Parameters
+            ----------
+
+            Sigma_HF_flat : list
+                Flattened out sigma as computed with the flatten() function in the utils,
+                this choice is to interface with the root finding routines in scipy
+
+            return_everything : optional, bool, default=True
+                If True, the function returns a tuple of unflattened Sigma_HF, Sigma_int, Sigma_DC 
+                if False, the function returns the flattened difference between the input and computed sigma
+
+            """
 
             if self.force_real:
                 Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
@@ -142,8 +169,32 @@ class ImpuritySolver(object):
                 n_tot = G_iw.total_density().real
                 n_up = 0.5*n_tot
                 n_down = 0.5*n_tot
-                DC_val, E_DC = compute_DC_from_density(n_tot, U = self.U, J = self.J, n_orbitals=5, method=DC_method)
-                Sigma_DC[bl] = DC_val * np.eye(G_dens[bl].shape[0])
+
+
+                # no dc gets handled as a zero dc_factor
+                if not self.dc:
+                    self.dc_fixed_value = 0.0
+                
+                if self.dc_fixed_occ is not None:
+                    mpi.report(f"\nHARTREE SOLVER: modifying occupations in DC calculation with given dc_fixed_occ = {self.dc_fixed_occ:.4f}")
+                    n_tot = self.dc_fixed_occ
+                    n_up = 0.5*n_tot
+                    n_down = 0.5*n_tot
+
+                if self.dc_fixed_value is None:
+                    mpi.report(f"\nHARTREE SOLVER: computing DC for block {bl} with following parameters")
+                    mpi.report(f"dc_U = {self.dc_U:.4f} ")
+                    mpi.report(f"dc_J = {self.dc_J:.4f}\n")
+                    
+                    mpi.report(f"HARTREE SOLVER: Calling DC calculation:\n")
+                    DC_val, _ = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J, n_orbitals=self.n_orb, method=self.dc_type)
+                    Sigma_DC[bl] = DC_val * np.eye(G_dens[bl].shape[0])
+
+                    mpi.report(f"\nHARTREE SOLVER: multiplying DC by a factor {self.dc_factor:.4f}")
+                    Sigma_DC[bl] *= self.dc_factor
+                else:
+                    mpi.report(f"\nHARTREE SOLVER: fixing dc to {self.dc_fixed_value:.4f}")
+                    Sigma_DC[bl] = self.dc_fixed_value * np.eye(G_dens[bl].shape[0])
 
             for term, coef in h_int:
                 bl1, u1 = term[0][1]
@@ -152,8 +203,6 @@ class ImpuritySolver(object):
                 bl4, u4 = term[2][1]
 
                 assert(bl1 == bl2 and bl3 == bl4)
-		
-		
                 Sigma_int[bl1][u2, u1] += coef * G_dens[bl3][u4, u3] 
                 Sigma_int[bl3][u4, u3] += coef * G_dens[bl1][u2, u1]
 
@@ -167,67 +216,74 @@ class ImpuritySolver(object):
             #subtract double counting component from interaction to get total sigma
             for bl, G0_bl in self.G0_iw:
                 Sigma_HF[bl] = Sigma_int[bl]-Sigma_DC[bl]
+                
+                # As a last resort check, whatever the solver does when J=0  should be 
+                # reduceable to the Dudarev formula, this is left here as a sanity 
+                # check one may perform should the implementation change
 
-            if one_shot:
+                #Sigma_HF[bl] = self.U *(0.5 * np.eye(G_dens[bl].shape[0]) - G_dens[bl])
+
+            if return_everything:
                 return Sigma_HF, Sigma_int, Sigma_DC
+            else:
+                return Sigma_HF_flat - flatten(Sigma_HF, self.force_real)
+        
+        def report_results(Sigma_HF, G_dens):
+            with np.printoptions(suppress=True, precision=4):
+              for name, bl in Sigma_HF.items():
+                  mpi.report('HARTREE SOLVER: Sigma_HF[\'%s\']:' % name)
+                  mpi.report(bl)
+              for name, bl in G_dens.items():
+                  mpi.report('Final G_dens[\'%s\']:' % name)
+                  mpi.report(bl)
 
-            return Sigma_HF_flat - flatten(Sigma_HF, self.force_real)
+
+        #initialize sigma to the stored value in the class
 
         Sigma_HF_init = self.Sigma_HF
-
+        
         if one_shot:
-            self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(flatten(Sigma_HF_init, self.force_real))
-            for bl, G0_bl in self.G0_iw:
-                self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
             with np.printoptions(suppress=True, precision=4):
               for name, bl in self.Sigma_HF.items():
-                mpi.report('Sigma_HF[\'%s\']:' % name)
+                mpi.report('HARTREE SOLVER: Sigma_HF before iterating[\'%s\']:' % name)
                 mpi.report(bl)
-              G_dens = self.G_iw.density()
-              for name, bl in G_dens.items():
-                    mpi.report('Final G_dens[\'%s\']:' % name)
-                    mpi.report(bl)
+
+            self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(flatten(Sigma_HF_init, self.force_real), return_everything=True)
+            
+            for bl, G0_bl in self.G0_iw:
+                self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
+            G_dens = self.G_iw.density()
+
+            report_results(self.Sigma_HF, G_dens)
 
         else:  # self consistent Hartree-Fock
-            #root_finder = root(f, flatten(Sigma_HF_init, self.force_real), method='broyden1', tol=10e-6)
-            raise RuntimeError("Self-consistent hartree-fock needs refactoring")
-            root_finder = root(compute_sigma_hartree, flatten(Sigma_HF_init, self.force_real), method='hybr', tol=10e-6)
+
+            with np.printoptions(suppress=True, precision=4):
+              for name, bl in self.Sigma_HF.items():
+                mpi.report('HARTREE SOLVER: Sigma_HF before iterating[\'%s\']:' % name)
+                mpi.report(bl)
+
+            #remove printing calls from self-consistent sigma search
+            with open(os.devnull, "w") as outnull, contextlib.redirect_stdout(outnull):
+                root_finder = root(lambda x: compute_sigma_hartree(x, return_everything=False),
+                                            flatten(Sigma_HF_init, self.force_real),
+                                            method='krylov',
+                                            tol=10e-4
+                                    )
+
             if root_finder['success']:
-                mpi.report('Self Consistent Hartree-Fock converged successfully')
-                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
-                mpi.report('Calculated self energy:')
-                with np.printoptions(suppress=True, precision=4):
-                    for name, bl in self.Sigma_HF.items():
-                        mpi.report('Sigma_HF[\'%s\']:' % name)
-                        mpi.report(bl)
-
-                for bl, G0_bl in self.G0_iw:
-                    self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-               
-                G_dens = self.G_iw.density()
-                with np.printoptions(suppress=True, precision=4):
-                  for name, bl in G_dens.items():
-                    mpi.report('Final G_dens[\'%s\']:' % name)
-                    mpi.report(bl)
-
+                mpi.report('Self Consistent Hartree-Fock converged successfully, performing final iteration')
             else:
-                mpi.report('Hartree-Fock solver did not converge successfully.')
+                mpi.report('Hartree-Fock solver did not converge successfully. Feeding last iteration as guess')
                 mpi.report(root_finder['message'])
-                self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)
-                mpi.report('Calculated self energy:')
-                with np.printoptions(suppress=True, precision=4):
-                    for name, bl in self.Sigma_HF.items():
-                        mpi.report('Sigma_HF[\'%s\']:' % name)
-                        mpi.report(bl)
 
-                for bl, G0_bl in self.G0_iw:
-                    self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-               
-                G_dens = self.G_iw.density()
-                with np.printoptions(suppress=True, precision=4):
-                  for name, bl in G_dens.items():
-                    mpi.report('Final G_dens[\'%s\']:' % name)
-                    mpi.report(bl)
+            self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(root_finder['x'], return_everything=True)
+            for bl, G0_bl in self.G0_iw:
+                self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
+            G_dens = self.G_iw.density()
+            
+            report_results(self.Sigma_HF, G_dens)
+
 
     def interaction_energy(self):
         """ Calculate the interaction energy
@@ -239,13 +295,38 @@ class ImpuritySolver(object):
         return E
     
     def DC_energy(self):
-        """ Calculate the interaction energy
+        """ Calculate the DC energy
 
         """
         E = 0
         for bl, gbl in self.G_iw:
             E += 0.5 * np.trace(self.Sigma_DC[bl].dot(gbl.density().real))
         return E
+    
+    def reinitialize_sigma(self, Sigma_guess):
+        """ Changes in place the sigma with the average over frequencies of a given Gf object.
+            Used to update the initial guess, must be called before the solve() method
+
+        Parameters
+        ----------
+            Sigma_guess : GfImFreq or GfReFreq object
+        """
+        # super ugly, needs changing
+        for bl in self.Sigma_HF.keys():
+            if self.force_real:
+                self.Sigma_HF[bl] = np.mean(Sigma_guess[bl].data, axis=0).real
+            else:
+                self.Sigma_HF[bl] = np.mean(Sigma_guess[bl].data, axis=0)
+
+        with np.printoptions(suppress=True, precision=4):
+          for name, bl in self.Sigma_HF.items():
+              mpi.report('HARTREE SOLVER: Updated guess for Sigma_HF[\'%s\']:' % name)
+              mpi.report(bl)
+
+
+
+    
+
 
     def __reduce_to_dict__(self):
         print(type(self.git_hash))
