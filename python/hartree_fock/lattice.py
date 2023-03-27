@@ -70,7 +70,7 @@ class LatticeSolver(object):
 
         self.git_hash = "@PROJECT_GIT_HASH@"
 
-    def solve(self, h_int, N_target=None, mu=None, with_fock=True, one_shot=False, tol=None):
+    def solve(self, h_int, N_target=None, mu=None, with_fock=True, one_shot=False, method='broyden1', tol=None):
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the LatticeSolver instance.
         If a fixed target density ``N_target`` is given, then the chemical potential is calculated
@@ -93,6 +93,10 @@ class LatticeSolver(object):
 
         one_shot : optional, bool
             True if the calcualtion is just one shot and not self consistent. Default is False
+
+        method : optional, string
+            method for root finder. Only used if one_shot=False, see scipy.optimize.root
+            for options. Default : 'broyden1'
 
         tol: optional, float
             Convergence tolerance to pass to root finder
@@ -161,9 +165,9 @@ class LatticeSolver(object):
 
         else:  # self consistent Hartree-Fock
             if tol is None:
-                root_finder = root(target_function, flatten(Sigma_HF_init), method='broyden1')
+                root_finder = root(target_function, flatten(Sigma_HF_init), method=method)
             else:
-                root_finder = root(target_function, flatten(Sigma_HF_init), method='broyden1', tol=tol)
+                root_finder = root(target_function, flatten(Sigma_HF_init), method=method, tol=tol)
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)

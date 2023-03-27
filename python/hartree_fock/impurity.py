@@ -22,8 +22,7 @@ from scipy.optimize import root
 from triqs.gf import *
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
-from .utils import *
-from triqs_dft_tools.sumk_dft import compute_DC_from_density
+from .utils import logo, flatten, unflatten, compute_DC_from_density
 
 
 class ImpuritySolver(object):
@@ -61,18 +60,18 @@ class ImpuritySolver(object):
 
     """
 
-    def __init__(self, gf_struct, beta, n_orb, dc=False , dc_U=0.0, dc_J=0.0, n_iw=1025, symmetries=[],  force_real=False):
+    def __init__(self, gf_struct, beta, dc=False , dc_U=0.0, dc_J=0.0, dc_type='cFLL', n_iw=1025, symmetries=[],  force_real=False):
 
         self.gf_struct = gf_struct
         self.beta = beta
-        self.n_orb = n_orb
+        self.n_orb = gf_struct[0][1]
         self.n_iw = n_iw
         self.symmetries = symmetries
         self.force_real = force_real
         
         #defaults for DC relevant values
         self.dc = dc          # whether to compute dc value
-        self.dc_type = 'cFLL'    # method used for dc_calculation, for options see 
+        self.dc_type = dc_type   # method used for dc_calculation
         self.dc_U = dc_U
         self.dc_J = dc_J
         self.dc_factor = 1.0
@@ -97,7 +96,7 @@ class ImpuritySolver(object):
         self.G_iw = self.G0_iw.copy()
         self.git_hash = "@PROJECT_GIT_HASH@"
 
-    def solve(self, h_int, with_fock=True, one_shot=True):
+    def solve(self, h_int, with_fock=True, one_shot=True, method='krylov', tol=1e-5):
         """ Solve for the Hartree Fock self energy using a root finder method.
         The self energy is stored in the ``Sigma_HF`` object of the ImpuritySolver instance.
         The Green's function is stored in the ``G_iw`` object of the ImpuritySolver instance.
@@ -113,6 +112,13 @@ class ImpuritySolver(object):
 
         one_shot : optional, bool
             True if the calcualtion is just one shot and not self consistent. Default is False
+
+        method : optional, string
+            method for root finder. Only used if one_shot=False, see scipy.optimize.root
+            for options. Default : krylov
+
+        tol : optional, float
+            tolerance for root finder if one_shot=False. default 1e-5
 
 
         """
@@ -196,6 +202,8 @@ class ImpuritySolver(object):
                     mpi.report(f"\nHARTREE SOLVER: fixing dc to {self.dc_fixed_value:.4f}")
                     Sigma_DC[bl] = self.dc_fixed_value * np.eye(G_dens[bl].shape[0])
 
+            # this assumes that hint is created with off_diag true, i.e. one up and one down block
+            # maybe change to the way it is done in TPRF
             for term, coef in h_int:
                 bl1, u1 = term[0][1]
                 bl2, u2 = term[3][1]
@@ -267,8 +275,8 @@ class ImpuritySolver(object):
             with open(os.devnull, "w") as outnull, contextlib.redirect_stdout(outnull):
                 root_finder = root(lambda x: compute_sigma_hartree(x, return_everything=False),
                                             flatten(Sigma_HF_init, self.force_real),
-                                            method='krylov',
-                                            tol=10e-4
+                                            method=method,
+                                            tol=tol
                                     )
 
             if root_finder['success']:
