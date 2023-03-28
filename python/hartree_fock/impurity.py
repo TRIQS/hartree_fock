@@ -84,8 +84,12 @@ class ImpuritySolver(object):
         # reinitialize_sigma before calling the solve() method
         if force_real:
             self.Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
+            self.Sigma_DC = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
+            self.Sigma_int = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
         else:
             self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
+            self.Sigma_DC = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
+            self.Sigma_int = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
 
         name_list = []
         block_list = []
@@ -175,6 +179,7 @@ class ImpuritySolver(object):
                 n_tot = G_iw.total_density().real
                 n_up = 0.5*n_tot
                 n_down = 0.5*n_tot
+                n_spin = G_iw[bl].total_density().real
 
 
                 # no dc gets handled as a zero dc_factor
@@ -193,7 +198,11 @@ class ImpuritySolver(object):
                     mpi.report(f"dc_J = {self.dc_J:.4f}\n")
                     
                     mpi.report(f"HARTREE SOLVER: Calling DC calculation:\n")
-                    DC_val, _ = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J, n_orbitals=self.n_orb, method=self.dc_type)
+                    if self.dc_type not in ['sFLL', 'sAMF']:
+                        DC_val, _ = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J, n_orbitals=self.n_orb, method=self.dc_type)
+                    else:
+                        DC_val, _ = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J,
+                                                            n_orbitals=self.n_orb, method=self.dc_type, N_spin=n_spin)
                     Sigma_DC[bl] = DC_val * np.eye(G_dens[bl].shape[0])
 
                     mpi.report(f"\nHARTREE SOLVER: multiplying DC by a factor {self.dc_factor:.4f}")
@@ -256,7 +265,13 @@ class ImpuritySolver(object):
                 mpi.report('HARTREE SOLVER: Sigma_HF before iterating[\'%s\']:' % name)
                 mpi.report(bl)
 
-            self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(flatten(Sigma_HF_init, self.force_real), return_everything=True)
+            if mpi.is_master_node():
+                self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(flatten(Sigma_HF_init, self.force_real), return_everything=True)
+
+            mpi.barrier(100)
+            self.Sigma_HF = mpi.bcast(self.Sigma_HF)
+            self.Sigma_int = mpi.bcast(self.Sigma_int)
+            self.Sigma_DC = mpi.bcast(self.Sigma_DC)
             
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
@@ -271,21 +286,28 @@ class ImpuritySolver(object):
                 mpi.report('HARTREE SOLVER: Sigma_HF before iterating[\'%s\']:' % name)
                 mpi.report(bl)
 
-            #remove printing calls from self-consistent sigma search
-            with open(os.devnull, "w") as outnull, contextlib.redirect_stdout(outnull):
-                root_finder = root(lambda x: compute_sigma_hartree(x, return_everything=False),
-                                            flatten(Sigma_HF_init, self.force_real),
-                                            method=method,
-                                            tol=tol
-                                    )
+            if mpi.is_master_node():
+                #remove printing calls from self-consistent sigma search
+                with open(os.devnull, "w") as outnull, contextlib.redirect_stdout(outnull):
+                    root_finder = root(lambda x: compute_sigma_hartree(x, return_everything=False),
+                                                flatten(Sigma_HF_init, self.force_real),
+                                                method=method,
+                                                tol=tol
+                                        )
 
-            if root_finder['success']:
-                mpi.report('Self Consistent Hartree-Fock converged successfully, performing final iteration')
-            else:
-                mpi.report('Hartree-Fock solver did not converge successfully. Feeding last iteration as guess')
-                mpi.report(root_finder['message'])
+                if root_finder['success']:
+                    mpi.report('Self Consistent Hartree-Fock converged successfully, performing final iteration')
+                else:
+                    mpi.report('Hartree-Fock solver did not converge successfully. Feeding last iteration as guess')
+                    mpi.report(root_finder['message'])
 
-            self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(root_finder['x'], return_everything=True)
+                self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(root_finder['x'], return_everything=True)
+
+            mpi.barrier(100)
+            self.Sigma_HF = mpi.bcast(self.Sigma_HF)
+            self.Sigma_int = mpi.bcast(self.Sigma_int)
+            self.Sigma_DC = mpi.bcast(self.Sigma_DC)
+
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
             G_dens = self.G_iw.density()
