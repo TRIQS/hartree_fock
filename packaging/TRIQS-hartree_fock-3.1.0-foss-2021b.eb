@@ -5,7 +5,7 @@ version = '3.1.0'
 
 homepage = 'https://triqs.github.io/hartree_fock/'
 description = """
- PROVIDE HERE A DESCRIPTION OF YOUR APPLICATION
+ Hartree-Fock lattice and impurity solvers based on the TRIQS library 
 """
 
 docurls = ['https://triqs.github.io/hartree_fock/%(version_major_minor)s.x/']
@@ -45,16 +45,16 @@ sanity_check_paths = {
              'lib/python%(pyshortver)s/site-packages/hartree_fock'],
 }
 
-sanity_check_commands = ["python -c 'import hartree_fock'"]
+sanity_check_commands = ["python -c 'import triqs_hartree_fock'"]
 
 modextrapaths = {
     'CPLUS_INCLUDE_PATH': 'include',
     'PYTHONPATH': 'lib/python%(pyshortver)s/site-packages',
-    'CMAKE_PREFIX_PATH': 'lib/cmake/hartree_fock',
+    'CMAKE_PREFIX_PATH': 'lib/cmake/triqs_hartree_fock',
 }
 modextravars = {
-    'HARTREE_FOCK_ROOT': '%(installdir)s',
-    'HARTREE_FOCK_VERSION': '%(version)s',
+    'TRIQS_HARTREE_FOCK_ROOT': '%(installdir)s',
+    'TRIQS_HARTREE_FOCK_VERSION': '%(version)s',
 }
 
 moduleclass = 'phys'
