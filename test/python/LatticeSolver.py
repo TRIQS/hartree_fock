@@ -17,11 +17,11 @@
 
 import unittest
 import numpy as np
-from hartree_fock.lattice import LatticeSolver
+from triqs_hartree_fock import LatticeSolver
 from triqs.gf import *
 from triqs.lattice import *
 from triqs.operators import *
-from hartree_fock.utils import flatten, unflatten
+from triqs_hartree_fock.utils import flatten, unflatten
 from h5 import HDFArchive
 
 

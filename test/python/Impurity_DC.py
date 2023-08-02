@@ -17,9 +17,8 @@
 
 import unittest
 import numpy as np
-from hartree_fock.lattice import LatticeSolver
-from hartree_fock.impurity import ImpuritySolver
-from hartree_fock.utils import *
+from triqs_hartree_fock import ImpuritySolver, LatticeSolver
+from triqs_hartree_fock.utils import flatten
 from triqs.gf import *
 from triqs.operators import *
 from h5 import HDFArchive

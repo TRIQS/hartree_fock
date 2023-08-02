@@ -26,4 +26,7 @@ module containing Hartree-Fock lattice and impurity solvers
 
 """
 
-__all__ = []
+from .impurity import ImpuritySolver
+from .lattice import LatticeSolver
+
+__all__ = ["ImpuritySolver", "LatticeSolver"]
