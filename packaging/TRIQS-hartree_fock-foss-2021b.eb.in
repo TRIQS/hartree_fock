@@ -1,7 +1,7 @@
 easyblock = 'CMakeMake'
 
 name = 'TRIQS-hartree_fock'
-version = '3.1.0'
+version = '@PROJECT_VERSION@'
 
 homepage = 'https://triqs.github.io/hartree_fock/'
 description = """
