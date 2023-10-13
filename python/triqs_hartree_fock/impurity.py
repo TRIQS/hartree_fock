@@ -68,6 +68,7 @@ class ImpuritySolver(object):
         self.n_iw = n_iw
         self.symmetries = symmetries
         self.force_real = force_real
+        self.E_dc =0.0
         
         #defaults for DC relevant values
         self.dc = dc          # whether to compute dc value
@@ -199,9 +200,9 @@ class ImpuritySolver(object):
                     
                     mpi.report(f"HARTREE SOLVER: Calling DC calculation:\n")
                     if self.dc_type not in ['sFLL', 'sAMF']:
-                        DC_val, _ = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J, n_orbitals=self.n_orb, method=self.dc_type)
+                        DC_val, self.E_dc = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J, n_orbitals=self.n_orb, method=self.dc_type)
                     else:
-                        DC_val, _ = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J,
+                        DC_val, self.E_dc = compute_DC_from_density(n_tot, U = self.dc_U, J = self.dc_J,
                                                             n_orbitals=self.n_orb, method=self.dc_type, N_spin=n_spin)
                     Sigma_DC[bl] = DC_val * np.eye(G_dens[bl].shape[0])
 
@@ -325,12 +326,10 @@ class ImpuritySolver(object):
         return E
     
     def DC_energy(self):
-        """ Calculate the DC energy
-
+        """ Exposes the DC energy
         """
-        E = 0
-        for bl, gbl in self.G_iw:
-            E += 0.5 * np.trace(self.Sigma_DC[bl].dot(gbl.density().real))
+
+        E = self.E_dc
         return E
     
     def reinitialize_sigma(self, Sigma_guess):
