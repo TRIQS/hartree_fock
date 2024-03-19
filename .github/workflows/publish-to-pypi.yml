@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: PyPI
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.x"
     - name: Install pypa/build
@@ -27,7 +27,7 @@ jobs:
         --user
     - name: prepare python distribution
       run: |
-        mkdir build && cd build 
+        mkdir build && cd build
         cmake ../
         cp packaging/pypi/* ../
         mv python/hartree_fock/version.py ../python/hartree_fock/version.py
@@ -53,7 +53,7 @@ jobs:
 
     steps:
     - name: Download all the dists
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
