@@ -11,8 +11,8 @@ jobs:
     name: Build distribution 📦
     runs-on: ubuntu-latest
     container:   # we have to provide a working triqs installation to make the cmake step work
-      # image: flatironinstitute/triqs:latest # this does not work since actions/checkout only accepts root as a user, triqs docker images setups a new user
-      image: ghcr.io/triqs/solid_dmft_github_ci:3.2.x
+      image: flatironinstitute/triqs:latest
+      options: --user root
 
     steps:
     - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/hartree_fock
+      url: https://pypi.org/p/triqs_hartree_fock
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
