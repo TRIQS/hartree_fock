@@ -2,9 +2,6 @@
 FROM flatironinstitute/triqs:unstable-ubuntu-clang
 ARG APPNAME=hartree_fock
 
-COPY requirements.txt /src/$APPNAME/requirements.txt
-RUN pip3 install -r /src/$APPNAME/requirements.txt
-
 COPY --chown=build . $SRC/$APPNAME
 WORKDIR $BUILD/$APPNAME
 RUN chown build .

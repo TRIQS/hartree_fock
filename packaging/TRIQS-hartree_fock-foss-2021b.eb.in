@@ -5,7 +5,7 @@ version = '@PROJECT_VERSION@'
 
 homepage = 'https://triqs.github.io/hartree_fock/'
 description = """
- Hartree-Fock lattice and impurity solvers based on the TRIQS library 
+ Hartree-Fock lattice and impurity solvers based on the TRIQS library
 """
 
 docurls = ['https://triqs.github.io/hartree_fock/%(version_major_minor)s.x/']
