@@ -25,6 +25,16 @@ from h5.formats import register_class
 from .utils import logo, flatten, unflatten, compute_DC_from_density
 
 
+def gf_density(gf):
+    """Compute density matrix with known high-frequency moments.
+
+    Uses the fact that G(iw) ~ 1/iw + O(1/iw^2), so the first moment is identity.
+    """
+    km = make_zero_tail(gf, 2)
+    km[1] = np.eye(gf.target_shape[0])
+    return gf.density(km)
+
+
 class ImpuritySolver(object):
 
     """ Hartree-Fock Impurity solver. The solver provides a constant sigma which rigidly shifts the local orbital levels
@@ -99,6 +109,7 @@ class ImpuritySolver(object):
             block_list.append(GfImFreq(beta=beta, n_points=n_iw, target_shape=[bl_size, bl_size]))
         self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
         self.G_iw = self.G0_iw.copy()
+
         self.git_hash = "@PROJECT_GIT_HASH@"
 
     def solve(self, h_int, with_fock=True, one_shot=True, method='krylov', tol=1e-5):
@@ -168,7 +179,7 @@ class ImpuritySolver(object):
             Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct, self.force_real)
             for bl, G0_bl in self.G0_iw:
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
-                G_dens[bl] = G_iw[bl].density()
+                G_dens[bl] = gf_density(G_iw[bl])
                 if self.force_real:
                     max_imag = G_dens[bl].imag.max()
                     if max_imag > 1e-10:
@@ -273,10 +284,11 @@ class ImpuritySolver(object):
             self.Sigma_HF = mpi.bcast(self.Sigma_HF)
             self.Sigma_int = mpi.bcast(self.Sigma_int)
             self.Sigma_DC = mpi.bcast(self.Sigma_DC)
-            
+
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-            G_dens = self.G_iw.density()
+            G_dens = {bl: gf_density(self.G_iw[bl]) for bl, _ in self.gf_struct}
+            self.density = G_dens
 
             report_results(self.Sigma_HF, G_dens)
 
@@ -311,8 +323,9 @@ class ImpuritySolver(object):
 
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-            G_dens = self.G_iw.density()
-            
+            G_dens = {bl: gf_density(self.G_iw[bl]) for bl, _ in self.gf_struct}
+            self.density = G_dens
+
             report_results(self.Sigma_HF, G_dens)
 
 
@@ -322,7 +335,7 @@ class ImpuritySolver(object):
         """
         E = 0
         for bl, gbl in self.G_iw:
-            E += 0.5 * np.trace(self.Sigma_int[bl].dot(gbl.density().real))
+            E += 0.5 * np.trace(self.Sigma_int[bl].dot(gf_density(gbl).real))
         return E
     
     def DC_energy(self):
