@@ -20,19 +20,10 @@ import contextlib
 import numpy as np
 from scipy.optimize import root
 from triqs.gf import *
+from triqs.gf.meshes import MeshDLRImFreq
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
 from .utils import logo, flatten, unflatten, compute_DC_from_density
-
-
-def gf_density(gf):
-    """Compute density matrix with known high-frequency moments.
-
-    Uses the fact that G(iw) ~ 1/iw + O(1/iw^2), so the first moment is identity.
-    """
-    km = make_zero_tail(gf, 2)
-    km[1] = np.eye(gf.target_shape[0])
-    return gf.density(km)
 
 
 class ImpuritySolver(object):
@@ -59,8 +50,13 @@ class ImpuritySolver(object):
     dc_J : float
         J parameter used in the double counting computation
 
-    n_iw: integer, optional.
-        Number of matsubara frequencies in the Matsubara Green's function. Default is 1025.
+    w_max : float
+        DLR energy cutoff. Controls the frequency range of the representation.
+        Typical values: 1-100. Larger values needed for sharply peaked spectral functions.
+
+    eps : float
+        DLR accuracy/precision. Controls the number of basis functions.
+        Typical values: 1e-6 to 1e-14. Smaller values give higher precision but more basis functions.
 
     symmeties : optional, list of functions
         symmetry functions acting on self energy at each consistent step
@@ -70,12 +66,13 @@ class ImpuritySolver(object):
 
     """
 
-    def __init__(self, gf_struct, beta, dc=False , dc_U=0.0, dc_J=0.0, dc_type='cFLL', n_iw=1025, symmetries=[],  force_real=False):
+    def __init__(self, gf_struct, beta, w_max, eps, dc=False, dc_U=0.0, dc_J=0.0, dc_type='cFLL', symmetries=[], force_real=False):
 
         self.gf_struct = gf_struct
         self.beta = beta
         self.n_orb = gf_struct[0][1]
-        self.n_iw = n_iw
+        self.w_max = w_max
+        self.eps = eps
         self.symmetries = symmetries
         self.force_real = force_real
         self.E_dc =0.0
@@ -102,11 +99,9 @@ class ImpuritySolver(object):
             self.Sigma_DC = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
             self.Sigma_int = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
 
-        name_list = []
-        block_list = []
-        for bl_name, bl_size in self.gf_struct:
-            name_list.append(bl_name)
-            block_list.append(GfImFreq(beta=beta, n_points=n_iw, target_shape=[bl_size, bl_size]))
+        mesh = MeshDLRImFreq(beta, 'Fermion', w_max, eps, symmetrize=True)
+        name_list = [bl_name for bl_name, _ in self.gf_struct]
+        block_list = [Gf(mesh=mesh, target_shape=[bl_size, bl_size]) for _, bl_size in self.gf_struct]
         self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
         self.G_iw = self.G0_iw.copy()
 
@@ -179,30 +174,25 @@ class ImpuritySolver(object):
             Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct, self.force_real)
             for bl, G0_bl in self.G0_iw:
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
-                G_dens[bl] = gf_density(G_iw[bl])
+                G_dens[bl] = G_iw[bl].density()
                 if self.force_real:
                     max_imag = G_dens[bl].imag.max()
                     if max_imag > 1e-10:
                         mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f' % max_imag)
                     G_dens[bl] = G_dens[bl].real
             
-            for bl, G0_bl in self.G0_iw:
+            for bl, _ in self.G0_iw:
                 #add DC
                 n_tot = G_iw.total_density().real
-                n_up = 0.5*n_tot
-                n_down = 0.5*n_tot
                 n_spin = G_iw[bl].total_density().real
-
 
                 # no dc gets handled as a zero dc_factor
                 if not self.dc:
                     self.dc_fixed_value = 0.0
-                
+
                 if self.dc_fixed_occ is not None:
                     mpi.report(f"\nHARTREE SOLVER: modifying occupations in DC calculation with given dc_fixed_occ = {self.dc_fixed_occ:.4f}")
                     n_tot = self.dc_fixed_occ
-                    n_up = 0.5*n_tot
-                    n_down = 0.5*n_tot
 
                 if self.dc_fixed_value is None:
                     mpi.report(f"\nHARTREE SOLVER: computing DC for block {bl} with following parameters")
@@ -243,7 +233,7 @@ class ImpuritySolver(object):
                 Sigma_int = function(Sigma_int)
            
             #subtract double counting component from interaction to get total sigma
-            for bl, G0_bl in self.G0_iw:
+            for bl, _ in self.G0_iw:
                 Sigma_HF[bl] = Sigma_int[bl]-Sigma_DC[bl]
                 
                 # As a last resort check, whatever the solver does when J=0  should be 
@@ -287,7 +277,7 @@ class ImpuritySolver(object):
 
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-            G_dens = {bl: gf_density(self.G_iw[bl]) for bl, _ in self.gf_struct}
+            G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
             self.density = G_dens
 
             report_results(self.Sigma_HF, G_dens)
@@ -301,7 +291,7 @@ class ImpuritySolver(object):
 
             if mpi.is_master_node():
                 #remove printing calls from self-consistent sigma search
-                with open(os.devnull, "w") as outnull, contextlib.redirect_stdout(outnull):
+                with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
                     root_finder = root(lambda x: compute_sigma_hartree(x, return_everything=False),
                                                 flatten(Sigma_HF_init, self.force_real),
                                                 method=method,
@@ -323,7 +313,7 @@ class ImpuritySolver(object):
 
             for bl, G0_bl in self.G0_iw:
                 self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-            G_dens = {bl: gf_density(self.G_iw[bl]) for bl, _ in self.gf_struct}
+            G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
             self.density = G_dens
 
             report_results(self.Sigma_HF, G_dens)
@@ -335,15 +325,13 @@ class ImpuritySolver(object):
         """
         E = 0
         for bl, gbl in self.G_iw:
-            E += 0.5 * np.trace(self.Sigma_int[bl].dot(gf_density(gbl).real))
+            E += 0.5 * np.trace(self.Sigma_int[bl].dot(gbl.density().real))
         return E
     
     def DC_energy(self):
         """ Exposes the DC energy
         """
-
-        E = self.E_dc
-        return E
+        return self.E_dc
     
     def reinitialize_sigma(self, Sigma_guess):
         """ Changes in place the sigma with the average over frequencies of a given Gf object.
@@ -353,8 +341,7 @@ class ImpuritySolver(object):
         ----------
             Sigma_guess : GfImFreq or GfReFreq object
         """
-        # super ugly, needs changing
-        for bl in self.Sigma_HF.keys():
+        for bl in self.Sigma_HF:
             if self.force_real:
                 self.Sigma_HF[bl] = np.mean(Sigma_guess[bl].data, axis=0).real
             else:
@@ -365,32 +352,24 @@ class ImpuritySolver(object):
               mpi.report('HARTREE SOLVER: Updated guess for Sigma_HF[\'%s\']:' % name)
               mpi.report(bl)
 
-
-
-    
-
-
     def __reduce_to_dict__(self):
-        print(type(self.git_hash))
-        store_dict = {'n_iw': self.n_iw, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
+        store_dict = {'w_max': self.w_max, 'eps': self.eps, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
                       'gf_struct': self.gf_struct, 'beta': self.beta,
                       'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF,
                       'git_hash': self.git_hash}
-        return store_dict
         if hasattr(self, 'last_solve_params'):
             store_dict['last_solve_params'] = self.last_solve_params
+        return store_dict
 
     @classmethod
-    def __factory_from_dict__(cls, name, D):
-
-        instance = cls(D['gf_struct'], D['beta'], D['n_iw'], D['symmetries'])
+    def __factory_from_dict__(cls, _name, D):
+        instance = cls(D['gf_struct'], D['beta'], D['w_max'], D['eps'], symmetries=D.get('symmetries', []))
         instance.Sigma_HF = D['Sigma_HF']
         instance.G0_iw = D['G0_iw']
         instance.G_iw = D['G_iw']
         instance.git_hash = D['git_hash']
         if 'last_solve_params' in D:
             instance.last_solve_params = D['last_solve_params']
-
         return instance
 
 

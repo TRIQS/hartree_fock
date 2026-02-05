@@ -28,6 +28,16 @@ from triqs.lattice import *
 from triqs.utility.dichotomy import dichotomy
 
 
+def set_G0_iw_from_Gloc(solver, Gloc, gf_struct):
+    """Set solver's G0_iw by evaluating Weiss field at DLR frequency points."""
+    for bl_name, _ in gf_struct:
+        for iw in solver.G0_iw[bl_name].mesh:
+            Gloc_iw = Gloc[bl_name](iw.value)
+            Sigma_bl = solver.Sigma_HF[bl_name]
+            G0_iw = np.linalg.inv(np.linalg.inv(Gloc_iw) + Sigma_bl)
+            solver.G0_iw[bl_name][iw] = G0_iw
+
+
 class test_impurity_solver(unittest.TestCase):
 
     # test that lattice and impurity solvers agree
@@ -51,21 +61,24 @@ class test_impurity_solver(unittest.TestCase):
         gf_struct = [('up', 1), ('down', 1)]
 
         SK = SumkDiscreteFromLattice(lattice=TBL, n_points=nk)
+        w_max, eps = 10.0, 1e-10
+        # External Sigma/Gloc use MeshImFreq for compatibility with SumkDiscreteFromLattice
         sigma = GfImFreq(beta=beta, n_points=1025, target_shape=[1, 1])
         Sigma = BlockGf(name_list=['up', 'down'], block_list=(sigma, sigma), make_copies=True)
         Gloc = Sigma.copy()
         # density_required = 1
         mu = 0
-        S = ImpuritySolver(gf_struct=gf_struct, beta=beta, n_iw=1025)
+        # ImpuritySolver uses MeshDLRImFreq internally
+        S = ImpuritySolver(gf_struct=gf_struct, beta=beta, w_max=w_max, eps=eps)
 
         converged = False
         while not converged:
-            for name, bl in gf_struct:
+            for name, _ in gf_struct:
                 Sigma[name] << S.Sigma_HF[name]
             # mu, density = dichotomy(lambda mu: SK(mu=mu, Sigma=Sigma).total_density().real, mu, density_required,
             #                         1e-5, .5, max_loops = 100, x_name="chemical potential", y_name="density", verbosity=3)
             Gloc << SK(mu=mu, Sigma=Sigma)
-            S.G0_iw << inverse(inverse(Gloc) + Sigma)
+            set_G0_iw_from_Gloc(S, Gloc, gf_struct)
             Sigma_old = S.Sigma_HF.copy()
             S.solve(h_int=h_int, one_shot=False, tol=1e-4)
             if np.allclose(flatten(Sigma_old), flatten(S.Sigma_HF), rtol=0, atol=1e-6):
@@ -78,7 +91,6 @@ class test_impurity_solver(unittest.TestCase):
             S = ar['solver']
 
         Sigma_imp = S.Sigma_HF
-        mu_imp = mu
 
         BL = BravaisLattice(units=[(1, 0, 0), (0, 1, 0)])
         BZ = BrillouinZone(BL)
