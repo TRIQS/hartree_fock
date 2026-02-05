@@ -90,14 +90,9 @@ class ImpuritySolver(object):
         # Here Sigma_HF gets initialized to numerical zeros
         # If you want to change this guess, use the method
         # reinitialize_sigma before calling the solve() method
-        if force_real:
-            self.Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
-            self.Sigma_DC = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
-            self.Sigma_int = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in gf_struct}
-        else:
-            self.Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
-            self.Sigma_DC = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
-            self.Sigma_int = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in gf_struct}
+        self.Sigma_HF = self._make_zero_sigma()
+        self.Sigma_DC = self._make_zero_sigma()
+        self.Sigma_int = self._make_zero_sigma()
 
         mesh = MeshDLRImFreq(beta, 'Fermion', w_max, eps, symmetrize=True)
         name_list = [bl_name for bl_name, _ in self.gf_struct]
@@ -106,6 +101,11 @@ class ImpuritySolver(object):
         self.G_iw = self.G0_iw.copy()
 
         self.git_hash = "@PROJECT_GIT_HASH@"
+
+    def _make_zero_sigma(self):
+        """Create a zero-initialized sigma dictionary."""
+        dtype = float if self.force_real else complex
+        return {bl: np.zeros((bl_size, bl_size), dtype=dtype) for bl, bl_size in self.gf_struct}
 
     def solve(self, h_int, with_fock=True, one_shot=True, method='krylov', tol=1e-5):
         """ Solve for the Hartree Fock self energy using a root finder method.
@@ -160,14 +160,9 @@ class ImpuritySolver(object):
 
             """
 
-            if self.force_real:
-                Sigma_HF = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
-                Sigma_DC = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
-                Sigma_int = {bl: np.zeros((bl_size, bl_size)) for bl, bl_size in self.gf_struct}
-            else:
-                Sigma_HF = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
-                Sigma_DC = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
-                Sigma_int = {bl: np.zeros((bl_size, bl_size), dtype=complex) for bl, bl_size in self.gf_struct}
+            Sigma_HF = self._make_zero_sigma()
+            Sigma_DC = self._make_zero_sigma()
+            Sigma_int = self._make_zero_sigma()
 
             G_iw = self.G0_iw.copy()
             G_dens = {}
@@ -257,40 +252,18 @@ class ImpuritySolver(object):
                   mpi.report(bl)
 
 
-        #initialize sigma to the stored value in the class
-
         Sigma_HF_init = self.Sigma_HF
-        
-        if one_shot:
-            with np.printoptions(suppress=True, precision=4):
-              for name, bl in self.Sigma_HF.items():
+
+        with np.printoptions(suppress=True, precision=4):
+            for name, bl in self.Sigma_HF.items():
                 mpi.report('HARTREE SOLVER: Sigma_HF before iterating[\'%s\']:' % name)
                 mpi.report(bl)
 
+        if one_shot:
             if mpi.is_master_node():
                 self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(flatten(Sigma_HF_init, self.force_real), return_everything=True)
-
-            mpi.barrier(100)
-            self.Sigma_HF = mpi.bcast(self.Sigma_HF)
-            self.Sigma_int = mpi.bcast(self.Sigma_int)
-            self.Sigma_DC = mpi.bcast(self.Sigma_DC)
-
-            for bl, G0_bl in self.G0_iw:
-                self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-            G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
-            self.density = G_dens
-
-            report_results(self.Sigma_HF, G_dens)
-
         else:  # self consistent Hartree-Fock
-
-            with np.printoptions(suppress=True, precision=4):
-              for name, bl in self.Sigma_HF.items():
-                mpi.report('HARTREE SOLVER: Sigma_HF before iterating[\'%s\']:' % name)
-                mpi.report(bl)
-
             if mpi.is_master_node():
-                #remove printing calls from self-consistent sigma search
                 with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
                     root_finder = root(lambda x: compute_sigma_hartree(x, return_everything=False),
                                                 flatten(Sigma_HF_init, self.force_real),
@@ -306,17 +279,17 @@ class ImpuritySolver(object):
 
                 self.Sigma_HF, self.Sigma_int, self.Sigma_DC = compute_sigma_hartree(root_finder['x'], return_everything=True)
 
-            mpi.barrier(100)
-            self.Sigma_HF = mpi.bcast(self.Sigma_HF)
-            self.Sigma_int = mpi.bcast(self.Sigma_int)
-            self.Sigma_DC = mpi.bcast(self.Sigma_DC)
+        mpi.barrier(100)
+        self.Sigma_HF = mpi.bcast(self.Sigma_HF)
+        self.Sigma_int = mpi.bcast(self.Sigma_int)
+        self.Sigma_DC = mpi.bcast(self.Sigma_DC)
 
-            for bl, G0_bl in self.G0_iw:
-                self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-            G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
-            self.density = G_dens
+        for bl, G0_bl in self.G0_iw:
+            self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
+        G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
+        self.density = G_dens
 
-            report_results(self.Sigma_HF, G_dens)
+        report_results(self.Sigma_HF, G_dens)
 
 
     def interaction_energy(self):
@@ -351,6 +324,21 @@ class ImpuritySolver(object):
           for name, bl in self.Sigma_HF.items():
               mpi.report('HARTREE SOLVER: Updated guess for Sigma_HF[\'%s\']:' % name)
               mpi.report(bl)
+
+    def set_G0_iw(self, Gloc):
+        """ Set G0_iw from local Green's function by evaluating Weiss field at DLR frequency points.
+
+        Parameters
+        ----------
+            Gloc : BlockGf on MeshImFreq or compatible mesh
+                Local Green's function used to compute the Weiss field G0 = (G_loc^{-1} + Sigma)^{-1}
+        """
+        for bl_name, _ in self.gf_struct:
+            for iw in self.G0_iw[bl_name].mesh:
+                Gloc_iw = Gloc[bl_name](iw.value)
+                Sigma_bl = self.Sigma_HF[bl_name]
+                G0_iw = np.linalg.inv(np.linalg.inv(Gloc_iw) + Sigma_bl)
+                self.G0_iw[bl_name][iw] = G0_iw
 
     def __reduce_to_dict__(self):
         store_dict = {'w_max': self.w_max, 'eps': self.eps, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,

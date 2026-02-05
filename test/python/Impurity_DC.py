@@ -21,20 +21,9 @@ from triqs_hartree_fock import ImpuritySolver
 from triqs_hartree_fock.utils import flatten
 from triqs.gf import *
 from triqs.operators import *
-from h5 import HDFArchive
 from triqs.lattice.tight_binding import TBLattice
 from triqs.sumk import *
 from triqs.lattice import *
-
-
-def set_G0_iw_from_Gloc(solver, Gloc, gf_struct):
-    """Set solver's G0_iw by evaluating Weiss field at DLR frequency points."""
-    for bl_name, _ in gf_struct:
-        for iw in solver.G0_iw[bl_name].mesh:
-            Gloc_iw = Gloc[bl_name](iw.value)
-            Sigma_bl = solver.Sigma_HF[bl_name]
-            G0_iw = np.linalg.inv(np.linalg.inv(Gloc_iw) + Sigma_bl)
-            solver.G0_iw[bl_name][iw] = G0_iw
 
 
 class test_impurity_solver(unittest.TestCase):
@@ -75,7 +64,7 @@ class test_impurity_solver(unittest.TestCase):
             # mu, density = dichotomy(lambda mu: SK(mu=mu, Sigma=Sigma).total_density().real, mu, density_required,
             #                         1e-5, .5, max_loops = 100, x_name="chemical potential", y_name="density", verbosity=3)
             Gloc << SK(mu=mu, Sigma=Sigma)
-            set_G0_iw_from_Gloc(S, Gloc, gf_struct)
+            S.set_G0_iw(Gloc)
             Sigma_old = S.Sigma_HF.copy()
             S.solve(h_int=h_int, one_shot=False, tol=1e-4)
             if np.allclose(flatten(Sigma_old), flatten(S.Sigma_HF), rtol=0, atol=1e-6):
