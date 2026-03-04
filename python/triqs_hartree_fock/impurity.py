@@ -287,6 +287,8 @@ class ImpuritySolver(object):
         for bl, G0_bl in self.G0_iw:
             self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
         G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
+        if self.force_real:
+            G_dens = {bl: d.real for bl, d in G_dens.items()}
         self.density = G_dens
 
         report_results(self.Sigma_HF, G_dens)
