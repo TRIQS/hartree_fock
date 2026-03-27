@@ -158,16 +158,13 @@ class LatticeSolver(object):
                 return Sigma_HF
             return Sigma_HF_flat - flatten(Sigma_HF, real=self.force_real)
 
-        Sigma_HF_init = self.Sigma_HF
+        x0 = flatten(self.Sigma_HF, real=self.force_real)
 
         if one_shot:
-            self.Sigma_HF = target_function(Sigma_HF_init)
+            self.Sigma_HF = target_function(x0)
 
         else:  # self consistent Hartree-Fock
-            if tol is None:
-                root_finder = root(target_function, flatten(Sigma_HF_init), method=method)
-            else:
-                root_finder = root(target_function, flatten(Sigma_HF_init), method=method, tol=tol)
+            root_finder = root(target_function, x0, method=method, tol=tol)
             if root_finder['success']:
                 mpi.report('Self Consistent Hartree-Fock converged successfully')
                 self.Sigma_HF = unflatten(root_finder['x'], self.gf_struct, self.force_real)

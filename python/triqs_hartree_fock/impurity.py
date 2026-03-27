@@ -171,9 +171,6 @@ class ImpuritySolver(object):
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
                 G_dens[bl] = G_iw[bl].density()
                 if self.force_real:
-                    max_imag = G_dens[bl].imag.max()
-                    if max_imag > 1e-10:
-                        mpi.report('Warning! Discarding imaginary part of density matrix. Largest imaginary part: %f' % max_imag)
                     G_dens[bl] = G_dens[bl].real
             
             for bl, _ in self.G0_iw:

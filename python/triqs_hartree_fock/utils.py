@@ -21,7 +21,9 @@ import triqs.utility.mpi as mpi
 
 def flatten(Sigma_HF, real=False):
     """
-    Flatten a dictionary of 2D Numpy arrays into a 1D Numpy array.
+    Flatten a dictionary of Hermitian/symmetric matrices into a 1D real array
+    encoding only the independent degrees of freedom: the diagonal and the
+    strict upper triangle.
 
     Parameters
     ----------
@@ -31,10 +33,14 @@ def flatten(Sigma_HF, real=False):
         True if the Numpy arrays have a real dtype. Default is False.
 
     """
-    if real:
-        return np.array([Sig_bl.flatten() for bl, Sig_bl in Sigma_HF.items()]).flatten()
-    else:
-        return np.array([Sig_bl.flatten().view(float) for bl, Sig_bl in Sigma_HF.items()]).flatten()
+    parts = []
+    for bl, Sig_bl in Sigma_HF.items():
+        N = Sig_bl.shape[0]
+        parts.append(np.diag(Sig_bl).real)
+        if N > 1:
+            upper = Sig_bl[np.triu_indices(N, k=1)]
+            parts.append(upper if real else upper.view(float))
+    return np.concatenate(parts)
 
 
 def unflatten(Sigma_HF_flat, gf_struct, real=False):
@@ -56,12 +62,19 @@ def unflatten(Sigma_HF_flat, gf_struct, real=False):
     offset = 0
     Sigma_HF = {}
     for bl, bl_size in gf_struct:
-        if real:
-            Sigma_HF[bl] = Sigma_HF_flat[list(range(offset, offset + bl_size**2))].reshape((bl_size, bl_size))
-            offset = offset + bl_size**2
-        else:
-            Sigma_HF[bl] = Sigma_HF_flat[list(range(offset, offset + 2*bl_size**2))].view(complex).reshape((bl_size, bl_size))
-            offset = offset + 2*bl_size**2
+        N = bl_size
+        dtype = float if real else complex
+        mat = np.zeros((N, N), dtype=dtype)
+        mat[np.diag_indices(N)] = Sigma_HF_flat[offset:offset + N]
+        offset += N
+        # N*(N-1)/2 upper-triangle entries, each 1 real (real case) or 2 reals (complex case)
+        n_upper = N * (N - 1) // 2 if real else N * (N - 1)
+        if n_upper > 0:
+            upper = Sigma_HF_flat[offset:offset + n_upper]
+            mat[np.triu_indices(N, k=1)] = upper if real else upper.view(complex)
+            offset += n_upper
+        mat = mat + mat.conj().T - np.diag(mat.diagonal().real)
+        Sigma_HF[bl] = mat
     return Sigma_HF
 
 
