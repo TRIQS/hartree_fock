@@ -19,7 +19,7 @@ import unittest
 import numpy as np
 from triqs_hartree_fock import ImpuritySolver
 from triqs_hartree_fock.utils import flatten
-from triqs.gf import *
+from triqs.gfs import *
 from triqs.operators import *
 from triqs.lattice.tight_binding import TBLattice
 from triqs.sumk import *

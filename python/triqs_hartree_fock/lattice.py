@@ -18,7 +18,7 @@
 import copy
 import numpy as np
 from scipy.optimize import root, brentq
-from triqs.gf import *
+from triqs.gfs import *
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
 from .utils import *

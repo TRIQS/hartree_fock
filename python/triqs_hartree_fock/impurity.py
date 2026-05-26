@@ -19,8 +19,8 @@ import os
 import contextlib
 import numpy as np
 from scipy.optimize import root
-from triqs.gf import *
-from triqs.gf.meshes import MeshDLRImFreq
+from triqs.gfs import *
+from triqs.mesh import MeshDLRImFreq
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
 from .utils import logo, flatten, unflatten, compute_DC_from_density

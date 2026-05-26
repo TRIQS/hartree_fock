@@ -18,7 +18,7 @@
 import unittest
 import numpy as np
 from triqs_hartree_fock import LatticeSolver
-from triqs.gf import *
+from triqs.gfs import *
 from triqs.lattice import *
 from triqs.operators import *
 from triqs_hartree_fock.utils import flatten, unflatten
