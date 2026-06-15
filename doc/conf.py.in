@@ -38,11 +38,14 @@ myst_enable_extensions = [
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
 
-source_suffix = '.rst'
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 # Turn on sphinx.ext.autosummary
 autosummary_generate = True
-autosummary_imported_members=False
+autosummary_imported_members = False
 
 project = '@PROJECT_NAME@'
 version = '@PROJECT_VERSION@'
@@ -99,10 +102,9 @@ plot_html_show_formats = False
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3.11', None), 'triqslibs': ('https://triqs.github.io/triqs/latest', None)}
 
-# numpydoc options
-numpydoc_show_class_members = False
-numpydoc_show_inherited_class_members = False
-numpydoc_class_members_toctree = False
+# configure numpydoc if enabled
+numpydoc_attributes_as_param_list = False
+
 
 # open links in new tab instead of same window
 from sphinx.writers.html import HTMLTranslator
@@ -139,10 +141,13 @@ class PatchedHTMLTranslator(HTMLTranslator):
         if 'target' in node:
             atts['target'] = node['target']
         self.body.append(self.starttag(node, 'a', '', **atts))
- 
+
         if node.get('secnumber'):
             self.body.append(('%s' + self.secnumber_suffix) %
                              '.'.join(map(str, node['secnumber'])))
 
+
 def setup(app):
     app.set_translator('html', PatchedHTMLTranslator)
+
+    return {'version': '1.0'}
