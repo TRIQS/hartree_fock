@@ -20,6 +20,7 @@ import numpy as np
 from triqs_hartree_fock import ImpuritySolver
 from triqs_hartree_fock.utils import flatten
 from triqs.gfs import *
+from triqs.mesh import MeshDLRImFreq
 from triqs.operators import *
 from triqs.lattice.tight_binding import TBLattice
 from triqs.sumk import *
@@ -54,8 +55,8 @@ class test_impurity_solver(unittest.TestCase):
         Sigma = BlockGf(name_list=['up', 'down'], block_list=(sigma, sigma), make_copies=True)
         Gloc = Sigma.copy()
         mu = 0
-        # ImpuritySolver uses MeshDLRImFreq internally
-        S = ImpuritySolver(gf_struct=gf_struct, beta=beta, w_max=w_max, eps=eps, dc=True, dc_U=2.0, dc_J=0.2, dc_type='cFLL')
+        mesh = MeshDLRImFreq(beta, 'Fermion', w_max=w_max, eps=eps, symmetrize=True)
+        S = ImpuritySolver(gf_struct=gf_struct, mesh=mesh, dc=True, dc_U=2.0, dc_J=0.2, dc_type='cFLL')
 
         converged = False
         while not converged:
