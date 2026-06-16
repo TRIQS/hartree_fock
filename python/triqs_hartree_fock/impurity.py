@@ -20,10 +20,25 @@ import contextlib
 import numpy as np
 from scipy.optimize import root
 from triqs.gfs import *
-from triqs.mesh import MeshDLRImFreq
+from triqs.mesh import MeshDLRImFreq, MeshImFreq
 import triqs.utility.mpi as mpi
 from h5.formats import register_class
 from .utils import logo, flatten, unflatten, compute_DC_from_density
+
+
+def _gf_density(gf):
+    """Density matrix of a Green's function, handling both mesh types.
+
+    On a full Matsubara mesh the known high-frequency moments are supplied (G(iw) ~ 1/iw,
+    so the first moment is the identity) for an accurate density even with large self
+    energy shifts. On a DLR mesh the moments are intrinsic, so density() is called without
+    them (a DLR mesh neither accepts known moments nor supports make_zero_tail).
+    """
+    if isinstance(gf.mesh, MeshDLRImFreq):
+        return gf.density()
+    km = make_zero_tail(gf, 2)
+    km[1] = np.eye(gf.target_shape[0])
+    return gf.density(km)
 
 
 class ImpuritySolver(object):
@@ -41,24 +56,20 @@ class ImpuritySolver(object):
         Green's function block as a string and the size of that block.
         For example: ``[ ('up', 3), ('down', 3) ]``.
 
-    beta : float
-        inverse temperature
-    
+    mesh : MeshDLRImFreq or MeshImFreq
+        Mesh for the solver's Green's functions; beta and statistic ('Fermion') are
+        taken from it. For a MeshDLRImFreq, w_max must cover the Hartree-shifted
+        spectrum (the constant Sigma_HF rigidly shifts G). A MeshImFreq must contain
+        negative frequencies; the density is then computed with the exact 1/(iw)
+        high-frequency moment.
+
     dc_U : float
         Hubbard U parameter used in the double counting computation
-    
+
     dc_J : float
         J parameter used in the double counting computation
 
-    w_max : float
-        DLR energy cutoff. Controls the frequency range of the representation.
-        Typical values: 1-100. Larger values needed for sharply peaked spectral functions.
-
-    eps : float
-        DLR accuracy/precision. Controls the number of basis functions.
-        Typical values: 1e-6 to 1e-14. Smaller values give higher precision but more basis functions.
-
-    symmeties : optional, list of functions
+    symmetries : optional, list of functions
         symmetry functions acting on self energy at each consistent step
 
     force_real : optional, bool
@@ -66,13 +77,18 @@ class ImpuritySolver(object):
 
     """
 
-    def __init__(self, gf_struct, beta, w_max, eps, dc=False, dc_U=0.0, dc_J=0.0, dc_type='cFLL', symmetries=[], force_real=False):
+    def __init__(self, gf_struct, mesh, dc=False, dc_U=0.0, dc_J=0.0,
+                 dc_type='cFLL', symmetries=(), force_real=False):
+
+        if not isinstance(mesh, (MeshImFreq, MeshDLRImFreq)):
+            raise TypeError(f"ImpuritySolver: mesh must be MeshImFreq or MeshDLRImFreq, got {type(mesh).__name__}")
+        if mesh.statistic != 'Fermion':
+            raise ValueError("ImpuritySolver: mesh must be fermionic")
+        if isinstance(mesh, MeshImFreq) and mesh.positive_only:
+            raise ValueError("ImpuritySolver: MeshImFreq must include negative frequencies")
 
         self.gf_struct = gf_struct
-        self.beta = beta
         self.n_orb = gf_struct[0][1]
-        self.w_max = w_max
-        self.eps = eps
         self.symmetries = symmetries
         self.force_real = force_real
         self.E_dc =0.0
@@ -94,13 +110,20 @@ class ImpuritySolver(object):
         self.Sigma_DC = self._make_zero_sigma()
         self.Sigma_int = self._make_zero_sigma()
 
-        mesh = MeshDLRImFreq(beta, 'Fermion', w_max, eps, symmetrize=True)
         name_list = [bl_name for bl_name, _ in self.gf_struct]
         block_list = [Gf(mesh=mesh, target_shape=[bl_size, bl_size]) for _, bl_size in self.gf_struct]
         self.G0_iw = BlockGf(name_list=name_list, block_list=block_list)
         self.G_iw = self.G0_iw.copy()
 
         self.git_hash = "@PROJECT_GIT_HASH@"
+
+    @property
+    def mesh(self):
+        return self.G0_iw.mesh
+
+    @property
+    def beta(self):
+        return self.G0_iw.mesh.beta
 
     def _make_zero_sigma(self):
         """Create a zero-initialized sigma dictionary."""
@@ -169,14 +192,18 @@ class ImpuritySolver(object):
             Sigma_unflattened = unflatten(Sigma_HF_flat, self.gf_struct, self.force_real)
             for bl, G0_bl in self.G0_iw:
                 G_iw[bl] << inverse(inverse(G0_bl) - Sigma_unflattened[bl])
-                G_dens[bl] = G_iw[bl].density()
+                G_dens[bl] = _gf_density(G_iw[bl])
                 if self.force_real:
                     G_dens[bl] = G_dens[bl].real
             
+            # Occupations from the moment-aware density matrices (G_dens), so the DC
+            # calculation uses the same high-frequency treatment as _gf_density() rather
+            # than a bare total_density() (which on a Matsubara mesh omits the moments).
+            n_tot = sum(np.trace(G_dens[b]).real for b, _ in self.G0_iw)
+
             for bl, _ in self.G0_iw:
                 #add DC
-                n_tot = G_iw.total_density().real
-                n_spin = G_iw[bl].total_density().real
+                n_spin = np.trace(G_dens[bl]).real
 
                 # no dc gets handled as a zero dc_factor
                 if not self.dc:
@@ -283,7 +310,7 @@ class ImpuritySolver(object):
 
         for bl, G0_bl in self.G0_iw:
             self.G_iw[bl] << inverse(inverse(G0_bl) - self.Sigma_HF[bl])
-        G_dens = {bl: self.G_iw[bl].density() for bl, _ in self.gf_struct}
+        G_dens = {bl: _gf_density(self.G_iw[bl]) for bl, _ in self.gf_struct}
         if self.force_real:
             G_dens = {bl: d.real for bl, d in G_dens.items()}
         self.density = G_dens
@@ -297,7 +324,7 @@ class ImpuritySolver(object):
         """
         E = 0
         for bl, gbl in self.G_iw:
-            E += 0.5 * np.trace(self.Sigma_int[bl].dot(gbl.density().real))
+            E += 0.5 * np.trace(self.Sigma_int[bl].dot(_gf_density(gbl).real))
         return E
     
     def DC_energy(self):
@@ -325,12 +352,15 @@ class ImpuritySolver(object):
               mpi.report(bl)
 
     def set_G0_iw(self, Gloc):
-        """ Set G0_iw from local Green's function by evaluating Weiss field at DLR frequency points.
+        """ Set G0_iw from local Green's function by evaluating the Weiss field at the
+            frequency points of the solver mesh (DLR or full Matsubara).
 
         Parameters
         ----------
             Gloc : BlockGf on MeshImFreq or compatible mesh
-                Local Green's function used to compute the Weiss field G0 = (G_loc^{-1} + Sigma)^{-1}
+                Local Green's function used to compute the Weiss field G0 = (G_loc^{-1} + Sigma)^{-1}.
+                Must be evaluable at all solver mesh points; note that for a DLR solver mesh the
+                largest node sits at a Matsubara index of order beta * w_max.
         """
         for bl_name, _ in self.gf_struct:
             for iw in self.G0_iw[bl_name].mesh:
@@ -340,8 +370,8 @@ class ImpuritySolver(object):
                 self.G0_iw[bl_name][iw] = G0_iw
 
     def __reduce_to_dict__(self):
-        store_dict = {'w_max': self.w_max, 'eps': self.eps, 'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
-                      'gf_struct': self.gf_struct, 'beta': self.beta,
+        store_dict = {'G0_iw': self.G0_iw, 'G_iw': self.G_iw,
+                      'gf_struct': self.gf_struct,
                       'symmetries': self.symmetries, 'Sigma_HF': self.Sigma_HF,
                       'git_hash': self.git_hash}
         if hasattr(self, 'last_solve_params'):
@@ -350,7 +380,9 @@ class ImpuritySolver(object):
 
     @classmethod
     def __factory_from_dict__(cls, _name, D):
-        instance = cls(D['gf_struct'], D['beta'], D['w_max'], D['eps'], symmetries=D.get('symmetries', []))
+        # The mesh travels inside the stored G0_iw, so archives written with older
+        # versions (which stored beta and w_max/eps or n_iw separately) load as well.
+        instance = cls(D['gf_struct'], D['G0_iw'].mesh, symmetries=D.get('symmetries', []))
         instance.Sigma_HF = D['Sigma_HF']
         instance.G0_iw = D['G0_iw']
         instance.G_iw = D['G_iw']
