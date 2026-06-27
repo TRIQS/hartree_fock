@@ -13,4 +13,3 @@ The documentation can be found at [triqs.github.io/hartree_fock](https://triqs.g
 </picture>
 
 TRIQS/hartree_fock is supported by the Flatiron Institute, a division of the Simons Foundation.
-

@@ -1,4 +1,4 @@
-hartree_fock - Hartree-Fock lattice and impurity solvers based on the TRIQS library 
+hartree_fock - Hartree-Fock lattice and impurity solvers based on the TRIQS library
 
 Copyright (C) 2022 by The Simons Foundation
   authors: Jonathan Karp, Alexander Hampel, Nils Wentzell, Hugo U. R. Strand, 

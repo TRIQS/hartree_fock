@@ -68,16 +68,13 @@ endif()
 
 # Python Support
 if(NOT TRIQS_WITH_PYTHON_SUPPORT)
-  message(FATAL_ERROR "TRIQS was installed without Python support. Cannot build the Python Interface. Disable the build with -DPythonSupport=OFF")
+  message(FATAL_ERROR "TRIQS was installed without Python support. TRIQS Python support is required.")
 endif()
 
 option(PythonSupport "Build with Python support" ON)
 
 # Documentation
 option(Build_Documentation "Build documentation" OFF)
-if(NOT IS_SUBPROJECT AND (Build_Documentation AND NOT PythonSupport))
-  message(FATAL_ERROR "Build_Documentation=ON requires PythonSupport to be enabled")
-endif()
 
 # Testing
 option(Build_Tests "Build tests" ON)
@@ -121,7 +118,7 @@ endif()
 # Additional configuration files
 add_subdirectory(share)
 
-# add packaging for automatic Versioning
+# add packaging for automatic versioning
 add_subdirectory(packaging)
 
 # #############
