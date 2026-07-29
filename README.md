@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21691768.svg)](https://doi.org/10.5281/zenodo.21691768)
+
 # TRIQS hartree_fock
 An application based on TRIQS for using the Hartree-Fock method to solve lattice and impurity problems.
 
