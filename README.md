@@ -1,3 +1,4 @@
+[![build](https://github.com/TRIQS/hartree_fock/workflows/build/badge.svg)](https://github.com/TRIQS/hartree_fock/actions?query=workflow%3Abuild)
 [![PyPI version](https://img.shields.io/pypi/v/triqs_hartree_fock.svg)](https://pypi.org/project/triqs_hartree_fock/)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21691768-blue.svg)](https://doi.org/10.5281/zenodo.21691768)
 
